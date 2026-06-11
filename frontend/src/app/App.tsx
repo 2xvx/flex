@@ -161,7 +161,7 @@ export default function App() {
       if (mode === "store") { navigateTo("store-hub"); return; }
       navigateTo("feed");
     } catch (err: any) {
-      toast.error(err.message || "Login failed");
+      throw err; // Let Login.tsx show the inline field error
     }
   };
 
@@ -217,6 +217,7 @@ export default function App() {
           <SignUp
             onSignUp={handleSignUp}
             onSwitchToLogin={() => setCurrentView("login")}
+            onGoogleLogin={handleGoogleLogin}
           />
         </>
       );

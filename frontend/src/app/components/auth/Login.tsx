@@ -262,7 +262,7 @@ function ForgotModal({ onClose }: { onClose: () => void }) {
 
 // ── Main Login ─────────────────────────────────────────────────────────────────
 interface LoginProps {
-  onLogin:         (email: string, password: string, mode: "member" | "gym" | "store") => void;
+  onLogin:         (email: string, password: string, mode: "member" | "gym" | "store") => Promise<void>;
   onSwitchToSignUp: () => void;
   onDemoLogin:     (accountType: "user" | "trainer" | "admin") => void;
   onGymSignup?:    () => void;
@@ -282,6 +282,8 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
   const [quoteIdx,    setQuoteIdx]    = useState(0);
   const [quoteKey,    setQuoteKey]    = useState(0);
   const [tickerIdx,   setTickerIdx]   = useState(0);
+  const [loginError,  setLoginError]  = useState<string | null>(null);
+  const [submitting,  setSubmitting]  = useState(false);
   const tickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -295,9 +297,25 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
     return () => clearInterval(id);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(email, password, mode);
+    setLoginError(null);
+    setSubmitting(true);
+    try {
+      await onLogin(email, password, mode);
+    } catch (err: any) {
+      const msg: string = err.message || "Login failed";
+      const noAccount = /not found|no user|user.+not|does not exist/i.test(msg);
+      setLoginError(
+        noAccount
+          ? "No account found with this email — Sign up!"
+          : /password|wrong|invalid credential/i.test(msg)
+          ? "Wrong password"
+          : msg
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleGoogle = async () => {
@@ -630,20 +648,20 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
 
             {/* Email */}
             <div style={{ marginBottom: 24 }}>
-              <p style={{ fontSize: 9, letterSpacing: 3, textTransform: "uppercase", color: `rgba(201,169,110,0.45)`, marginBottom: 12 }}>
+              <p style={{ fontSize: 9, letterSpacing: 3, textTransform: "uppercase", color: loginError ? `rgba(239,68,68,0.7)` : `rgba(201,169,110,0.45)`, marginBottom: 12 }}>
                 Email
               </p>
               <div style={{
                 display: "flex", alignItems: "center", gap: 12,
-                borderBottom: `0.5px solid rgba(255,255,255,0.1)`,
-                paddingBottom: 12,
+                borderBottom: `0.5px solid ${loginError ? "rgba(239,68,68,0.6)" : "rgba(255,255,255,0.1)"}`,
+                paddingBottom: 12, transition: "border-color 0.2s",
               }}>
-                <Mail size={14} color={`rgba(201,169,110,0.3)`} strokeWidth={1.5} />
+                <Mail size={14} color={loginError ? `rgba(239,68,68,0.5)` : `rgba(201,169,110,0.3)`} strokeWidth={1.5} />
                 <input
                   type="email" required
                   placeholder="you@example.com"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={e => { setEmail(e.target.value); setLoginError(null); }}
                   style={{
                     flex: 1, background: "transparent", border: "none", outline: "none",
                     fontSize: 13, color: OW,
@@ -653,9 +671,9 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
             </div>
 
             {/* Password */}
-            <div style={{ marginBottom: 32 }}>
+            <div style={{ marginBottom: loginError ? 12 : 32 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <p style={{ fontSize: 9, letterSpacing: 3, textTransform: "uppercase", color: `rgba(201,169,110,0.45)` }}>
+                <p style={{ fontSize: 9, letterSpacing: 3, textTransform: "uppercase", color: loginError ? `rgba(239,68,68,0.7)` : `rgba(201,169,110,0.45)` }}>
                   Password
                 </p>
                 <button
@@ -672,15 +690,15 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
               </div>
               <div style={{
                 display: "flex", alignItems: "center", gap: 12,
-                borderBottom: `0.5px solid rgba(255,255,255,0.1)`,
-                paddingBottom: 12,
+                borderBottom: `0.5px solid ${loginError ? "rgba(239,68,68,0.6)" : "rgba(255,255,255,0.1)"}`,
+                paddingBottom: 12, transition: "border-color 0.2s",
               }}>
-                <Lock size={14} color={`rgba(201,169,110,0.3)`} strokeWidth={1.5} />
+                <Lock size={14} color={loginError ? `rgba(239,68,68,0.5)` : `rgba(201,169,110,0.3)`} strokeWidth={1.5} />
                 <input
                   type={showPass ? "text" : "password"} required
                   placeholder="••••••••"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={e => { setPassword(e.target.value); setLoginError(null); }}
                   style={{
                     flex: 1, background: "transparent", border: "none", outline: "none",
                     fontSize: 13, color: OW,
@@ -696,25 +714,44 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
               </div>
             </div>
 
+            {/* Inline login error */}
+            {loginError && (
+              <div style={{
+                marginBottom: 24,
+                display: "flex", alignItems: "center", gap: 8,
+                background: "rgba(239,68,68,0.07)",
+                border: "0.5px solid rgba(239,68,68,0.25)",
+                borderRadius: 0, padding: "9px 12px",
+              }}>
+                <span style={{ fontSize: 11, color: "rgba(239,68,68,0.85)", lineHeight: 1.5 }}>
+                  {loginError}
+                  {/Sign up/i.test(loginError) && (
+                    <> <button type="button" onClick={onSwitchToSignUp} style={{ background: "none", border: "none", cursor: "pointer", color: G1, fontSize: 11, padding: 0, textDecoration: "underline" }}>Sign up now</button></>
+                  )}
+                </span>
+              </div>
+            )}
+
             {/* CTA */}
             <button
               type="submit"
+              disabled={submitting}
               style={{
                 width: "100%", height: 46,
                 background: `rgba(201,169,110,0.07)`,
                 border: `0.5px solid rgba(201,169,110,0.35)`,
-                borderRadius: 0, cursor: "pointer",
+                borderRadius: 0, cursor: submitting ? "not-allowed" : "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
                 fontSize: 10, letterSpacing: 5, textTransform: "uppercase",
-                color: G1,
+                color: G1, opacity: submitting ? 0.6 : 1,
                 animation: "luxCtaPulse 3s ease-in-out infinite",
                 transition: "background 0.2s",
               }}
               onMouseEnter={e => (e.currentTarget.style.background = `rgba(201,169,110,0.13)`)}
               onMouseLeave={e => (e.currentTarget.style.background = `rgba(201,169,110,0.07)`)}
             >
-              {mode === "gym" ? "Enter Dashboard" : mode === "store" ? "Enter Store Hub" : "Enter"}
-              <ArrowRight size={14} strokeWidth={1.5} />
+              {submitting ? "Signing in…" : mode === "gym" ? "Enter Dashboard" : mode === "store" ? "Enter Store Hub" : "Enter"}
+              {!submitting && <ArrowRight size={14} strokeWidth={1.5} />}
             </button>
 
             {/* OR divider */}
