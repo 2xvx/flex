@@ -1,0 +1,205 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+/* ─── Light-mode overrides ────────────────────────────────────────────────────
+   ThemeProvider adds class="light" to <html> when toggled — no escaping issues.
+   All hardcoded dark Tailwind colors are overridden here via the .light ancestor.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+html.light { color-scheme: light; }
+
+/* ── Solid dark backgrounds → light equivalents ── */
+html.light [class*="bg-[#0f0d12]"],
+html.light .bg-\[\#0f0d12\]  { background-color: #f4f1f8 !important; }
+
+html.light [class*="bg-[#0a0810]"],
+html.light .bg-\[\#0a0810\]  { background-color: #f0edf7 !important; }
+
+html.light [class*="bg-[#141118]"],
+html.light .bg-\[\#141118\]  { background-color: #ffffff !important; }
+
+html.light [class*="bg-[#1a1520]"],
+html.light .bg-\[\#1a1520\]  { background-color: #f5f2fb !important; }
+
+html.light [class*="bg-[#1a1625]"],
+html.light .bg-\[\#1a1625\]  { background-color: #f5f2fb !important; }
+
+html.light [class*="bg-[#1a161d]"],
+html.light .bg-\[\#1a161d\]  { background-color: #ede9f4 !important; }
+
+html.light [class*="bg-[#221e26]"],
+html.light .bg-\[\#221e26\]  { background-color: #ede9f4 !important; }
+
+html.light [class*="bg-[#2a2630]"],
+html.light .bg-\[\#2a2630\]  { background-color: #e8e4f0 !important; }
+
+/* ── Text: white → dark-purple near-black ── */
+html.light .text-white        { color: #1a1523 !important; }
+html.light .text-white\/85    { color: rgba(26,21,35,.90) !important; }
+html.light .text-white\/80    { color: rgba(26,21,35,.85) !important; }
+html.light .text-white\/70    { color: rgba(26,21,35,.75) !important; }
+html.light .text-white\/60    { color: rgba(26,21,35,.65) !important; }
+html.light .text-white\/50    { color: rgba(26,21,35,.55) !important; }
+html.light .text-white\/45    { color: rgba(26,21,35,.50) !important; }
+html.light .text-white\/40    { color: rgba(26,21,35,.45) !important; }
+html.light .text-white\/35    { color: rgba(26,21,35,.40) !important; }
+html.light .text-white\/30    { color: rgba(26,21,35,.35) !important; }
+html.light .text-white\/25    { color: rgba(26,21,35,.30) !important; }
+html.light .text-white\/20    { color: rgba(26,21,35,.25) !important; }
+html.light .text-white\/15    { color: rgba(26,21,35,.20) !important; }
+html.light .text-white\/10    { color: rgba(26,21,35,.15) !important; }
+
+/* ── Borders: white-alpha → dark-alpha ── */
+html.light .border-white\/5          { border-color: rgba(26,21,35,.07) !important; }
+html.light .border-white\/8          { border-color: rgba(26,21,35,.09) !important; }
+html.light .border-white\/10         { border-color: rgba(26,21,35,.11) !important; }
+html.light .border-white\/15         { border-color: rgba(26,21,35,.15) !important; }
+html.light .border-white\/20         { border-color: rgba(26,21,35,.20) !important; }
+html.light .border-white\/\[0\.07\]  { border-color: rgba(26,21,35,.08) !important; }
+
+/* ── Subtle alpha backgrounds (used for card rows, hover fills) ── */
+html.light .bg-white\/3    { background-color: rgba(26,21,35,.03) !important; }
+html.light .bg-white\/5    { background-color: rgba(26,21,35,.05) !important; }
+html.light .bg-white\/8    { background-color: rgba(26,21,35,.06) !important; }
+html.light .bg-white\/10   { background-color: rgba(26,21,35,.07) !important; }
+html.light .bg-white\/20   { background-color: rgba(26,21,35,.10) !important; }
+
+/* ── Hover variants ── */
+html.light .hover\:bg-white\/5:hover   { background-color: rgba(26,21,35,.05) !important; }
+html.light .hover\:bg-white\/20:hover  { background-color: rgba(26,21,35,.10) !important; }
+html.light .hover\:text-white\/80:hover { color: rgba(26,21,35,.85) !important; }
+html.light .hover\:text-white:hover    { color: #1a1523 !important; }
+
+/* ── Dividers ── */
+html.light .divide-white\/5 > * + * { border-color: rgba(26,21,35,.07) !important; }
+
+/* ─── Mobile / Capacitor performance optimizations ───────────────────────────
+   Eliminates the 300ms tap delay, enables momentum scrolling, prevents
+   text selection on touch, and hints the GPU for animated elements.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Remove tap highlight flash on Android */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Eliminate 300 ms click delay on all interactive elements */
+a, button, [role="button"], input, select, textarea, label {
+  touch-action: manipulation;
+}
+
+/* Momentum (inertia) scrolling for all scrollable containers */
+.overflow-y-auto,
+.overflow-y-scroll,
+.overflow-x-auto,
+.overflow-x-scroll,
+.overflow-auto,
+.overflow-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* GPU-accelerate fixed/sticky elements to prevent jank */
+nav, header, aside {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Prevent body rubber-banding / overscroll on mobile */
+body {
+  overscroll-behavior: none;
+}
+
+/* Video: always show native controls as fallback, fill frame properly */
+video {
+  object-fit: cover;
+  /* Allow inline playback (required on iOS/Android WebView) */
+  -webkit-playsinline: true;
+}
+
+/* ─── Micro-interactions ──────────────────────────────────────────────────────
+   Global button press scale, ripple effect, skeleton shimmer, and
+   progress-ring entrance animation.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── Button scale on press (hardware-accelerated) ── */
+button,
+[role="button"] {
+  transition-property: transform, box-shadow, opacity;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+button:active,
+[role="button"]:active {
+  transform: scale(0.94);
+}
+/* Don't scale disabled buttons */
+button:disabled,
+[role="button"]:disabled {
+  transform: none;
+}
+
+/* ── Ripple keyframe ── */
+@keyframes ripple-out {
+  0%   { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(8); opacity: 0; }
+}
+.ripple-wave {
+  position: absolute;
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  margin-top: -40px;
+  margin-left: -40px;
+  background: rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+  animation: ripple-out 0.55s ease-out forwards;
+  z-index: 99;
+}
+
+/* ── Skeleton shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.skeleton {
+  border-radius: 0.75rem;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.09) 40%,
+    rgba(255,255,255,0.04) 80%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+html.light .skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(26,21,35,0.05) 0%,
+    rgba(26,21,35,0.12) 40%,
+    rgba(26,21,35,0.05) 80%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+/* ── Count-up number entrance ── */
+@keyframes num-pop {
+  0%   { transform: scale(0.7) translateY(6px); opacity: 0; }
+  70%  { transform: scale(1.08) translateY(-1px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.num-pop {
+  animation: num-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ── Progress ring entrance ── */
+@keyframes ring-fill {
+  from { stroke-dashoffset: var(--ring-empty); }
+  to   { stroke-dashoffset: var(--ring-offset); }
+}
+.ring-animate {
+  animation: ring-fill 1s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
+}

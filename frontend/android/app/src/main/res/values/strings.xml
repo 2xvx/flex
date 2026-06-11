@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Flex</string>
+    <string name="title_activity_main">Flex</string>
+    <string name="package_name">com.flex.app</string>
+    <string name="custom_url_scheme">com.flex.app</string>
+</resources>
