@@ -2,12 +2,10 @@ import { useState, useEffect } from "react";
 import { Mail, Lock, Eye, EyeOff, User, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { API } from "../../../config";
-import { signInWithGoogle } from "../../../services/authService";
 
 interface SignUpProps {
   onSignUp: (data: SignUpData) => void;
   onSwitchToLogin: () => void;
-  onGoogleLogin?: (user: import("../../types").User) => void;
 }
 
 export interface SignUpData {
@@ -50,7 +48,7 @@ const inputStyle = {
   transition: "border-color 0.2s",
 } as React.CSSProperties;
 
-export function SignUp({ onSignUp, onSwitchToLogin, onGoogleLogin }: SignUpProps) {
+export function SignUp({ onSignUp, onSwitchToLogin }: SignUpProps) {
   const [accountType,  setAccountType]  = useState<"user" | "trainer">("user");
   const [name,         setName]         = useState("");
   const [email,        setEmail]        = useState("");
@@ -67,20 +65,22 @@ export function SignUp({ onSignUp, onSwitchToLogin, onGoogleLogin }: SignUpProps
 
   useEffect(() => { setMounted(true); }, []);
 
-  const handleGoogle = async () => {
-    try {
-      toast.loading("Signing in with Google\u2026", { id: "google-signup" });
-      const user = await signInWithGoogle();
-      localStorage.setItem("currentUser", JSON.stringify(user));
-      toast.success(`Welcome, ${user.name}!`, { id: "google-signup" });
-      if (onGoogleLogin) {
-        onGoogleLogin(user);
-      } else {
-        window.location.reload();
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Google sign-in failed", { id: "google-signup" });
-    }
+
+  // Debounced username availability check
+  const checkUsername = (val: string) => {
+    const clean = val.toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    setUsername(clean);
+    if (clean.length < 3) { setUnAvail(false); return; }
+    setUnChecking(true);
+    clearTimeout((window as any).__unTimer);
+    (window as any).__unTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/check-username/${clean}`);
+        const d = await r.json();
+        setUnAvail(!d.available);
+      } catch { setUnAvail(false); }
+      setUnChecking(false);
+    }, 500);
   };
 
   const strength = getStrength(password);
@@ -90,6 +90,8 @@ export function SignUp({ onSignUp, onSwitchToLogin, onGoogleLogin }: SignUpProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreed)              return toast.error("Please agree to the terms first");
+    if (!username || username.length < 3) return toast.error("Username must be at least 3 characters");
+    if (unAvail) return toast.error("Username already taken");
     if (password !== confirm) return toast.error("Passwords don't match");
     if (password.length < 8)  return toast.error("Password must be at least 8 characters");
     if (accountType === "trainer" && !specialty) return toast.error("Please select your specialty");
@@ -113,7 +115,7 @@ export function SignUp({ onSignUp, onSwitchToLogin, onGoogleLogin }: SignUpProps
       if (!res.ok) throw new Error(data.error || "Signup failed");
 
       toast.success("Account created! Welcome to Flex 💪");
-      onSignUp({ name, email, password, accountType, specialty, bio });
+      onSignUp({ name, email, password, accountType, specialty, bio, username });
       onSwitchToLogin();
     } catch (err: any) {
       toast.error(err.message || "Could not connect to the server");
@@ -214,6 +216,17 @@ export function SignUp({ onSignUp, onSwitchToLogin, onGoogleLogin }: SignUpProps
             </div>
           </div>
 
+          {/* Username */}
+          <div>
+            <label style={{ fontSize: 10, color: "rgba(240,235,227,0.35)", letterSpacing: 1.2, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Username</label>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", color: "rgba(240,235,227,0.3)", fontSize: 14 }}>@</span>
+              <input type="text" className="su-input" style={{ ...inputStyle, paddingLeft: 30, borderColor: username.length >= 3 ? (unAvail ? "rgba(239,68,68,0.4)" : unChecking ? "rgba(201,169,110,0.2)" : "rgba(34,197,94,0.4)") : "rgba(201,169,110,0.12)" }} placeholder="yourname" value={username} onChange={e => checkUsername(e.target.value)} required />
+              {username.length >= 3 && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12 }}>{unChecking ? "⏳" : unAvail ? "❌" : "✅"}</span>}
+            </div>
+            {unAvail && <p style={{ fontSize: 10, color: "#ef4444", marginTop: 4 }}>Username already taken</p>}
+          </div>
+
           {/* Email */}
           <div>
             <label style={{ fontSize: 10, color: "rgba(240,235,227,0.35)", letterSpacing: 1.2, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Email</label>
@@ -228,7 +241,7 @@ export function SignUp({ onSignUp, onSwitchToLogin, onGoogleLogin }: SignUpProps
             <label style={{ fontSize: 10, color: "rgba(240,235,227,0.35)", letterSpacing: 1.2, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Password</label>
             <div style={{ position: "relative" }}>
               <Lock style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "rgba(240,235,227,0.2)" }} />
-              <input type={showPw ? "text" : "password"} className="su-input" style={{ ...inputStyle, paddingLeft: 38, paddingRight: 42 }} placeholder="Min. 8 characters" value={password} onChange={e => setPassword(e.target.value)} required />
+              <input type={showPw ? "text" : "password"} className="su-input" style={{ ...inputStyle, paddingLeft: 38, paddingRight: 42 }} autoComplete="new-password" placeholder="Min. 8 characters" value={password} onChange={e => setPassword(e.target.value)} required />
               <button type="button" onClick={() => setShowPw(v => !v)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(240,235,227,0.25)", padding: 0, display: "flex" }}>
                 {showPw ? <EyeOff style={{ width: 15, height: 15 }} /> : <Eye style={{ width: 15, height: 15 }} />}
               </button>
@@ -250,7 +263,7 @@ export function SignUp({ onSignUp, onSwitchToLogin, onGoogleLogin }: SignUpProps
             <label style={{ fontSize: 10, color: "rgba(240,235,227,0.35)", letterSpacing: 1.2, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Confirm Password</label>
             <div style={{ position: "relative" }}>
               <Lock style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "rgba(240,235,227,0.2)" }} />
-              <input type={showCf ? "text" : "password"} className="su-input" style={{ ...inputStyle, paddingLeft: 38, paddingRight: 42, borderColor: pwMatch ? "rgba(34,197,94,0.4)" : pwMiss ? "rgba(239,68,68,0.4)" : "rgba(201,169,110,0.12)" }} placeholder="Repeat your password" value={confirm} onChange={e => setConfirm(e.target.value)} required />
+              <input type={showCf ? "text" : "password"} className="su-input" style={{ ...inputStyle, paddingLeft: 38, paddingRight: 42, borderColor: pwMatch ? "rgba(34,197,94,0.4)" : pwMiss ? "rgba(239,68,68,0.4)" : "rgba(201,169,110,0.12)" }} autoComplete="new-password" placeholder="Repeat your password" value={confirm} onChange={e => setConfirm(e.target.value)} required />
               <button type="button" onClick={() => setShowCf(v => !v)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(240,235,227,0.25)", padding: 0, display: "flex" }}>
                 {showCf ? <EyeOff style={{ width: 15, height: 15 }} /> : <Eye style={{ width: 15, height: 15 }} />}
               </button>

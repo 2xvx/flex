@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Mail, Lock, Eye, EyeOff, X, ArrowRight, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { signInWithGoogle } from "../../../services/authService";
 import { API } from "../../../config";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
@@ -262,21 +261,19 @@ function ForgotModal({ onClose }: { onClose: () => void }) {
 
 // ── Main Login ─────────────────────────────────────────────────────────────────
 interface LoginProps {
-  onLogin:         (email: string, password: string, mode: "member" | "gym" | "store") => Promise<void>;
+  onLogin:         (email: string, password: string, mode: "member" | "gym") => Promise<void>;
   onSwitchToSignUp: () => void;
   onDemoLogin:     (accountType: "user" | "trainer" | "admin") => void;
   onGymSignup?:    () => void;
-  onStoreSignup?:  () => void;
-  onGoogleLogin?:  (user: import("../../types").User) => void;
 }
 
-export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onStoreSignup, onGoogleLogin }: LoginProps) {
+export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: LoginProps) {
   useGlobalStyles();
 
   const [email,       setEmail]       = useState("");
   const [password,    setPassword]    = useState("");
   const [showPass,    setShowPass]    = useState(false);
-  const [mode,        setMode]        = useState<"member" | "gym" | "store">("member");
+  const [mode,        setMode]        = useState<"member" | "gym">("member");
   const [showForgot,  setShowForgot]  = useState(false);
   const [mounted,     setMounted]     = useState(false);
   const [quoteIdx,    setQuoteIdx]    = useState(0);
@@ -318,21 +315,6 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
     }
   };
 
-  const handleGoogle = async () => {
-    try {
-      toast.loading("Signing in with Google…", { id: "google-login" });
-      const user = await signInWithGoogle();
-      localStorage.setItem("currentUser", JSON.stringify(user));
-      toast.success(`Welcome, ${user.name}!`, { id: "google-login" });
-      if (onGoogleLogin) {
-        onGoogleLogin(user);
-      } else {
-        window.location.reload();
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Google sign-in failed", { id: "google-login" });
-    }
-  };
 
   const doubled = [...TICKER, ...TICKER]; // seamless loop
 
@@ -606,13 +588,13 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
           {/* ── Form heading ── */}
           <div style={{ position: "relative", zIndex: 2, marginBottom: 36 }}>
             <p style={{ fontSize: 9, letterSpacing: 4, textTransform: "uppercase", color: `rgba(201,169,110,0.5)`, marginBottom: 10 }}>
-              {mode === "gym" ? "Gym portal" : mode === "store" ? "Store portal" : "Member access"}
+              {mode === "gym" ? "Gym portal" : "Member access"}
             </p>
             <h2 style={{ fontSize: 28, fontWeight: 300, color: OW, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 4 }}>
-              {mode === "store" ? <>Store<br /><span style={{ fontWeight: 500, color: "#fff" }}>portal.</span></> : <>Welcome<br /><span style={{ fontWeight: 500, color: "#fff" }}>back.</span></>}
+              {<>Welcome<br /><span style={{ fontWeight: 500, color: "#fff" }}>back.</span></>}
             </h2>
             <p style={{ fontSize: 11, color: `rgba(240,235,227,0.25)` }}>
-              {mode === "store" ? "Sign in to your store dashboard." : "Your journey continues here."}
+              {"Your journey continues here."}
             </p>
           </div>
 
@@ -623,7 +605,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
             borderBottom: `0.5px solid rgba(255,255,255,0.06)`,
             marginBottom: 32,
           }}>
-            {(["member", "gym", "store"] as const).map((m, i, arr) => (
+            {(["member", "gym"] as const).map((m, i, arr) => (
               <button
                 key={m}
                 type="button"
@@ -750,7 +732,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
               onMouseEnter={e => (e.currentTarget.style.background = `rgba(201,169,110,0.13)`)}
               onMouseLeave={e => (e.currentTarget.style.background = `rgba(201,169,110,0.07)`)}
             >
-              {submitting ? "Signing in…" : mode === "gym" ? "Enter Dashboard" : mode === "store" ? "Enter Store Hub" : "Enter"}
+              {submitting ? "Signing in…" : mode === "gym" ? "Enter Dashboard" : "Enter"}
               {!submitting && <ArrowRight size={14} strokeWidth={1.5} />}
             </button>
 
@@ -760,32 +742,6 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup, onS
               <span style={{ fontSize: 9, letterSpacing: 3, textTransform: "uppercase", color: `rgba(255,255,255,0.12)` }}>or</span>
               <div style={{ flex: 1, height: 0.5, background: `rgba(255,255,255,0.05)` }} />
             </div>
-
-            {/* Google */}
-            <button
-              type="button"
-              onClick={handleGoogle}
-              style={{
-                width: "100%", height: 40, borderRadius: 0,
-                border: `0.5px solid rgba(255,255,255,0.07)`,
-                background: `rgba(255,255,255,0.02)`,
-                cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-                fontSize: 9, letterSpacing: 3, textTransform: "uppercase",
-                color: `rgba(240,235,227,0.28)`,
-                transition: "background 0.2s, border-color 0.2s",
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = `rgba(255,255,255,0.05)`; e.currentTarget.style.borderColor = `rgba(255,255,255,0.12)`; }}
-              onMouseLeave={e => { e.currentTarget.style.background = `rgba(255,255,255,0.02)`; e.currentTarget.style.borderColor = `rgba(255,255,255,0.07)`; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Continue with Google
-            </button>
 
             {/* Footer links */}
             <div style={{ marginTop: "auto", paddingTop: 24 }}>

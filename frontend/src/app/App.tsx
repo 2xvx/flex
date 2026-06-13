@@ -185,7 +185,9 @@ export default function App() {
       const masked = data.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
       setPendingOTP({ user, maskedEmail: masked });
     } catch (err: any) {
-      toast.error(err.message || "Sign up failed");
+      const msg = err.message || "";
+      if (/already.in.use|email.*exists/i.test(msg)) toast.error("Email already registered — try signing in instead.");
+      else toast.error(msg || "Sign up failed");
     }
   };
 
@@ -244,7 +246,6 @@ export default function App() {
           onLogin={handleLogin}
           onDemoLogin={handleDemoLogin}
           onSwitchToSignUp={() => setCurrentView("signup")}
-          onGoogleLogin={handleGoogleLogin}
           onGymSignup={() => setCurrentView("gym-signup")}
         />
       </>

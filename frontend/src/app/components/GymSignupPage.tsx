@@ -4,6 +4,7 @@ import { Building2, MapPin, Phone, Globe, FileText, ArrowRight, ArrowLeft, Loade
 import { toast } from 'sonner';
 
 import { API } from '../../config';
+import { signIn } from '../../../services/authService';
 
 const AMENITIES_LIST = [
   'Free Weights', 'Cardio Machines', 'Weight Machines', 'Swimming Pool',
@@ -58,6 +59,12 @@ export function GymSignupPage({ onSuccess, onBack }: GymSignupPageProps) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Registration failed');
       }
+      setDone(true);
+      // Auto-login the gym account
+      try {
+        await signIn(email, password);
+      } catch {}
+      if (onBack) onBack();
       setDone(true);
       setTimeout(() => onSuccess('', email, password), 1500);
     } catch (e: any) {

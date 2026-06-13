@@ -3603,6 +3603,19 @@ app.post('/api/users/:uid/fcm-token', verifyToken, verifyOwner, async (req, res)
 // EMAIL VERIFICATION — OTP CODE SYSTEM
 // ════════════════════════════════════════════════════════════════════════════
 
+
+// GET /api/check-username/:username — check if username is available
+app.get('/api/check-username/:username', async (req, res) => {
+  try {
+    const username = req.params.username.toLowerCase().trim();
+    if (!username || username.length < 3) return res.json({ available: false });
+    const snap = await db.collection('users').where('username', '==', username).limit(1).get();
+    res.json({ available: snap.empty });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/auth/send-otp — generate a 6-digit code, store in Firestore, email it
 app.post('/api/auth/send-otp', verifyToken, async (req, res) => {
   try {
