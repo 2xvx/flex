@@ -209,6 +209,7 @@ export function TrainPage({ currentUser }: Props) {
 
 
       {tab === 'challenges'  && <WeeklyChallengePage currentUser={currentUser} />}
+      {tab === 'challenges'  && <WeeklyChallengePage currentUser={currentUser} />}
       {tab === 'recap'       && <WeeklyRecapPage currentUser={currentUser} />}
     </div>
   );

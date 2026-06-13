@@ -66,6 +66,12 @@ export function GymSignupPage({ onSuccess, onBack }: GymSignupPageProps) {
       } catch {}
       if (onBack) onBack();
       setDone(true);
+      // Auto-login the gym account
+      try {
+        await signIn(email, password);
+      } catch {}
+      if (onBack) onBack();
+      setDone(true);
       setTimeout(() => onSuccess('', email, password), 1500);
     } catch (e: any) {
       toast.error(e.message);
