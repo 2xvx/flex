@@ -93,6 +93,8 @@ export function MealsPage({ currentUser }: MealsPageProps) {
     ingredients: '', instructions: '', photo: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string>('');
 
   const isTrainer = currentUser?.accountType === 'trainer' || currentUser?.accountType === 'admin';
 
@@ -163,6 +165,29 @@ export function MealsPage({ currentUser }: MealsPageProps) {
     }
   }
 
+  function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    // Create compressed preview via canvas
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 800;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      setPhotoPreview(dataUrl);
+      setForm(f => ({ ...f, photo: dataUrl }));
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  }
+
   async function handleAddMeal(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim() || !form.category) return;
@@ -188,6 +213,8 @@ export function MealsPage({ currentUser }: MealsPageProps) {
       setMeals(prev => [meal, ...prev]);
       setShowAddModal(false);
       setForm({ name: '', description: '', category: 'breakfast', calories: '', protein: '', carbs: '', fat: '', ingredients: '', instructions: '', photo: '' });
+      setPhotoFile(null);
+      setPhotoPreview('');
       toast.success('🍽️ Meal posted!');
     } catch (err: any) {
       toast.error(err.message || 'Could not post meal');
@@ -324,14 +351,12 @@ export function MealsPage({ currentUser }: MealsPageProps) {
           <h1 className="text-white text-2xl font-bold">Healthy Meals</h1>
           <p className="text-white/50 text-sm mt-0.5">Curated meals from our trainers</p>
         </div>
-        {isTrainer && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-          >
-            <Plus size={16} /> Post Meal
-          </button>
-        )}
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+        >
+          <Plus size={16} /> Add Meal
+        </button>
       </div>
 
       {/* Tabs */}
@@ -397,7 +422,7 @@ export function MealsPage({ currentUser }: MealsPageProps) {
           <p className="text-white/40 text-sm max-w-xs">
             {tab === 'saved'
               ? 'Browse community meals and tap the bookmark to save them here.'
-              : isTrainer ? 'Be the first to post a healthy meal!' : 'Check back soon — trainers will be posting meals.'}
+              : 'Be the first to add a healthy meal!'}
           </p>
         </div>
       ) : (
@@ -564,13 +589,26 @@ export function MealsPage({ currentUser }: MealsPageProps) {
               </div>
 
               <div>
-                <label className="text-white/70 text-xs font-medium mb-1 block">Photo URL (optional)</label>
-                <input
-                  value={form.photo}
-                  onChange={e => setForm(f => ({ ...f, photo: e.target.value }))}
-                  placeholder="https://..."
-                  className="w-full px-3 py-2.5 rounded-xl bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] text-white text-sm placeholder-white/30 focus:outline-none focus:border-emerald-500/50"
-                />
+                <label className="text-white/70 text-xs font-medium mb-1 block">Photo (optional)</label>
+                <label className="flex flex-col items-center justify-center w-full cursor-pointer rounded-xl border border-dashed border-[rgba(201,169,110,0.25)] hover:border-emerald-500/50 transition-colors overflow-hidden bg-[rgba(201,169,110,0.04)]">
+                  {photoPreview ? (
+                    <div className="relative w-full">
+                      <img src={photoPreview} alt="preview" className="w-full h-40 object-cover" />
+                      <span className="absolute bottom-2 right-2 text-xs text-white/70 bg-black/60 px-2 py-0.5 rounded-full backdrop-blur-sm">tap to change</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-6 gap-2">
+                      <span className="text-3xl">📷</span>
+                      <span className="text-white/50 text-xs">Tap to upload photo</span>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoSelect}
+                  />
+                </label>
               </div>
 
               <div className="flex gap-3 pt-2">
