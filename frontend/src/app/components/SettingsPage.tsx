@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 
 import { API } from '../../config';
 
-type Page = null | 'account' | 'privacy' | 'notifications' | 'fitness' | 'apps' | 'export';
+type Page = null | 'account' | 'privacy' | 'notifications' | 'fitness' | 'apps';
 
 const FITNESS_GOALS = ['Lose Weight','Build Muscle','Increase Endurance','Improve Flexibility','General Fitness','Train for Sport','Stress Relief'];
 const ACTIVITY_LEVELS = ['Sedentary','Lightly Active','Moderately Active','Very Active','Athlete'];
@@ -431,13 +431,6 @@ export function SettingsPage({ currentUser }: SettingsPageProps) {
         desc: 'Strava, Apple Health, Garmin',
         bg: 'bg-cyan-500/10',
       },
-      {
-        id: 'export' as Page,
-        icon: <Download className="w-5 h-5 text-orange-400" />,
-        label: 'Data & Export',
-        desc: 'Post privacy defaults, download your data',
-        bg: 'bg-orange-500/10',
-      },
     ];
 
     return (
@@ -824,126 +817,7 @@ export function SettingsPage({ currentUser }: SettingsPageProps) {
   }
 
   // ── DATA & EXPORT sub-page ────────────────────────────────────────────────────
-  if (page === 'export') {
-    const PRIVACY_OPTIONS: { value: string; label: string; desc: string; Icon: any }[] = [
-      { value: 'public',    label: 'Public',          desc: 'Anyone can see your posts', Icon: Globe },
-      { value: 'followers', label: 'Followers only',  desc: 'Only people who follow you', Icon: Users },
-      { value: 'private',   label: 'Only me',         desc: 'Completely private',         Icon: LockIcon },
-    ];
-
-    const [exporting, setExporting] = useState(false);
-
-    const handleExport = async () => {
-      if (!currentUser) return;
-      setExporting(true);
-      try {
-        const res  = await authFetch(`${API}/users/${currentUser.id}/export`);
-        if (!res.ok) throw new Error('Export failed');
-        const data = await res.json();
-
-        // Convert to CSV sections
-        const toCSV = (rows: Record<string, any>[], headers: string[]) => {
-          if (!rows.length) return headers.join(',') + '\n(no data)';
-          return [
-            headers.join(','),
-            ...rows.map(r => headers.map(h => JSON.stringify(r[h] ?? '')).join(',')),
-          ].join('\n');
-        };
-
-        const workoutCSV  = toCSV(data.workouts,  ['date','type','duration_min','calories','exercises','caption']);
-        const bodyCSV     = toCSV(data.bodyStats,  ['date','weight_kg','body_fat_pct','muscle_mass_kg','notes']);
-        const nutritionCSV = toCSV(data.nutrition, ['date','calories','protein_g','carbs_g','fat_g']);
-
-        const full = [
-          `# Flex Data Export — ${data.username}`,
-          `# Exported: ${new Date().toLocaleDateString()}`,
-          '',
-          '## WORKOUTS',
-          workoutCSV,
-          '',
-          '## BODY STATS',
-          bodyCSV,
-          '',
-          '## NUTRITION',
-          nutritionCSV,
-        ].join('\n');
-
-        const blob = new Blob([full], { type: 'text/csv' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href = url; a.download = `flex-export-${data.username}-${new Date().toISOString().slice(0,10)}.csv`;
-        a.click(); URL.revokeObjectURL(url);
-        toast.success('Export downloaded!');
-      } catch { toast.error('Export failed — try again'); }
-      finally { setExporting(false); }
-    };
-
-    return (
-      <div className="max-w-2xl mx-auto py-6 px-4 space-y-4">
-        <SubPageHeader title="Data & Export" subtitle="Post defaults and your personal data" />
-
-        {/* Post privacy defaults */}
-        <Section title="Default post visibility">
-          <div className="pt-1 space-y-1.5">
-            {PRIVACY_OPTIONS.map(({ value, label, desc, Icon }) => (
-              <button
-                key={value}
-                onClick={() => set('defaultPostVisibility', value)}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border text-sm transition-all ${
-                  (settings.defaultPostVisibility || 'public') === value
-                    ? 'bg-[rgba(201,169,110,0.08)] border-[rgba(201,169,110,0.25)]'
-                    : 'border-[rgba(201,169,110,0.08)] hover:border-[rgba(201,169,110,0.12)]'
-                }`}
-              >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                  (settings.defaultPostVisibility || 'public') === value ? 'bg-[rgba(201,169,110,0.12)]' : 'bg-[rgba(201,169,110,0.04)]'
-                }`}>
-                  <Icon className={`w-4 h-4 ${(settings.defaultPostVisibility || 'public') === value ? 'text-[#e8c98a]' : 'text-white/30'}`} />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className={`font-medium text-sm ${(settings.defaultPostVisibility || 'public') === value ? 'text-[#e8c98a]' : 'text-white/60'}`}>{label}</p>
-                  <p className="text-white/30 text-xs">{desc}</p>
-                </div>
-                {(settings.defaultPostVisibility || 'public') === value && (
-                  <Check className="w-4 h-4 text-[#c9a96e] shrink-0" />
-                )}
-              </button>
-            ))}
-          </div>
-        </Section>
-
-        <button onClick={saveSettings} disabled={saving}
-          className="w-full py-2.5 rounded-xl bg-[#c9a96e] text-white text-sm font-medium hover:bg-[#c9a96e] disabled:opacity-50 transition-all">
-          {saving ? 'Saving…' : 'Save default visibility'}
-        </button>
-
-        {/* Export */}
-        <Section title="Export your data">
-          <div className="pt-2 space-y-3">
-            <p className="text-white/40 text-xs leading-relaxed">
-              Download all your workouts, body stats, and nutrition logs as a CSV file. Includes the last 200 nutrition entries and all workout history.
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {['Workouts', 'Body stats', 'Nutrition'].map(label => (
-                <div key={label} className="bg-white/4 border border-[rgba(201,169,110,0.07)] rounded-xl px-3 py-2 text-center">
-                  <p className="text-white/60 text-xs font-medium">{label}</p>
-                  <p className="text-white/25 text-[10px]">included</p>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-600/80 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold text-sm transition-all"
-            >
-              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {exporting ? 'Preparing export…' : 'Download CSV export'}
-            </button>
-          </div>
-        </Section>
-      </div>
-    );
-  }
+  
 
   return null;
 }

@@ -24,11 +24,6 @@ import { TrainPage }          from "./components/TrainPage";
 import { HealthPage }         from "./components/HealthPage";
 import { CommunityPage }      from "./components/CommunityPage";
 import { TrainerDashboard }   from "./components/TrainerDashboard";
-import { FlexStorePage }      from "./components/FlexStorePage";
-import { FlexWalletPage }     from "./components/FlexWalletPage";
-import { StoreDashboard }     from "./components/StoreDashboard";
-import { StoreSignupPage }    from "./components/StoreSignupPage";
-import { FlexMerchantSystem } from "./components/FlexMerchantSystem";
 import { GymDashboard }       from "./components/GymDashboard";
 import { GymSignupPage }      from "./components/GymSignupPage";
 import { GymsPage }           from "./components/GymsPage";
@@ -52,15 +47,13 @@ const FULL_HEIGHT_VIEWS = ["community", "clips"];
 
 const NO_RIGHT_SIDEBAR = [
   "community", "clips", "discover", "train", "health",
-  "gym-hub", "flex-store", "flex-wallet", "store-hub", "store-signup",
-  "explore", "communities", "gyms",
+  "gym-hub", "explore", "communities", "gyms",
 ];
 
 const KNOWN_VIEWS_LIST = [
   "feed", "profile", "discover", "train", "health", "community", "clips",
   "settings", "admin", "followers", "post", "subscription", "trainer-hub",
-  "gym-hub", "gym-signup", "flex-store", "flex-wallet", "store-hub",
-  "store-signup", "explore", "communities", "gyms",
+  "gym-hub", "gym-signup", "explore", "communities", "gyms",
 ];
 
 function viewFromPath(path: string): string {
@@ -160,7 +153,6 @@ export default function App() {
       setCurrentUser(user);
       setIsAuthenticated(true);
       if (mode === "gym")   { navigateTo("gym-hub");   return; }
-      if (mode === "store") { navigateTo("store-hub"); return; }
       navigateTo("feed");
     } catch (err: any) {
       throw err; // Let Login.tsx show the inline field error
@@ -254,7 +246,6 @@ export default function App() {
           onSwitchToSignUp={() => setCurrentView("signup")}
           onGoogleLogin={handleGoogleLogin}
           onGymSignup={() => setCurrentView("gym-signup")}
-          onStoreSignup={() => setCurrentView("store-signup")}
         />
       </>
     );
@@ -475,25 +466,6 @@ export default function App() {
             <GymsPage currentUser={currentUser} onNavigate={navigateTo} />
           )}
 
-          {/* ── Flex Store ── */}
-          {currentView === "flex-store" && (
-            <FlexStorePage onNavigate={navigateTo} />
-          )}
-
-          {/* ── Flex Wallet ── */}
-          {currentView === "flex-wallet" && (
-            <FlexWalletPage onNavigate={navigateTo} />
-          )}
-
-          {/* ── Store Hub (merchant dashboard) ── */}
-          {currentView === "store-hub" && currentUser?.accountType === "store" && (
-            <StoreDashboard currentUser={currentUser} onNavigate={navigateTo} />
-          )}
-
-          {/* ── Store Signup ── */}
-          {currentView === "store-signup" && (
-            <StoreSignupPage onNavigate={navigateTo} />
-          )}
 
           {/* ── Fallback ── */}
           {!KNOWN_VIEWS_LIST.includes(currentView) && (

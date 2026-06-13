@@ -1,13 +1,12 @@
 // HealthPage.tsx — Nutrition + Meals + Water + Recovery + Grocery + Habits + Wearables
 import { useState } from 'react';
-import { Apple, UtensilsCrossed, Droplets, Zap, ShoppingCart, Flame, Watch } from 'lucide-react';
+import { Apple, UtensilsCrossed, Droplets, Zap, ShoppingCart, Flame } from 'lucide-react';
 import { NutritionPage } from './NutritionPage';
 import { MealsPage } from './MealsPage';
 import { WaterTrackerPage } from './WaterTrackerPage';
 import { RecoveryScorePage } from './RecoveryScorePage';
 import { GroceryListPage } from './GroceryListPage';
 import { HabitTrackerPage } from './HabitTrackerPage';
-import { HealthIntegrationPage } from './HealthIntegrationPage';
 import { User } from '../types';
 
 interface Props { currentUser: User | null; }
@@ -19,7 +18,6 @@ const TABS = [
   { id: 'water',     label: 'Water',      Icon: Droplets,        color: 'border-sky-500'    },
   { id: 'recovery',  label: 'Recovery',   Icon: Zap,             color: 'border-amber-500'  },
   { id: 'grocery',   label: 'Grocery',    Icon: ShoppingCart,    color: 'border-green-500'  },
-  { id: 'wearables', label: 'Wearables',  Icon: Watch,           color: 'border-[#c9a96e]' },
 ];
 
 export function HealthPage({ currentUser }: Props) {
@@ -45,7 +43,6 @@ export function HealthPage({ currentUser }: Props) {
       {tab === 'water'     && <WaterTrackerPage currentUser={currentUser} />}
       {tab === 'recovery'  && <RecoveryScorePage currentUser={currentUser} />}
       {tab === 'grocery'   && <GroceryListPage currentUser={currentUser} />}
-      {tab === 'wearables' && currentUser && <HealthIntegrationPage userId={currentUser.id} />}
     </div>
   );
 }

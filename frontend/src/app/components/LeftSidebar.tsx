@@ -23,8 +23,6 @@ import {
   Settings,
   Briefcase,
   Building2,
-  ShoppingBag,
-  Wallet,
 } from "lucide-react";
 import { User as UserType } from "../types";
 
@@ -53,8 +51,6 @@ const NAV_ITEMS = [
   { id: "health", label: "Health", Icon: Salad },
   { id: "community", label: "Community", Icon: Users2 },
   { id: "gyms", label: "Find Gyms", Icon: Building2 },
-  { id: "flex-store", label: "Flex Store", Icon: ShoppingBag },
-  { id: "flex-wallet", label: "Wallet", Icon: Wallet },
 ];
 
 function NavBtn({
@@ -518,24 +514,7 @@ export function LeftSidebar({
           </>
         )}
 
-        {currentUser?.accountType === "store" && (
-          <>
-            <div
-              style={{
-                margin: "8px 2px",
-                height: 0.5,
-                background: "rgba(201,169,110,0.07)",
-              }}
-            />
-            <NavBtn
-              id="store-hub"
-              label="Store Dashboard"
-              Icon={ShoppingBag}
-              isActive={currentView === "store-hub"}
-              onClick={() => onNavigate("store-hub")}
-            />
-          </>
-        )}
+
 
         {currentUser?.accountType === "admin" && (
           <>

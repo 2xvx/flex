@@ -1,9 +1,8 @@
 // CommunityPage.tsx — Messages + Communities + Events + Accountability + Weekly Challenge + Find Buddy + Gyms
 import { useState } from 'react';
-import { MessageSquare, Users, UserPlus2, MapPin, Calendar, UserCheck, Trophy } from 'lucide-react';
+import { MessageSquare, Users, MapPin, Calendar, Trophy } from 'lucide-react';
 import { MessagesPage } from './MessagesPage';
 import { CommunitiesPage } from './CommunitiesPage';
-import { WorkoutBuddyPage } from './WorkoutBuddyPage';
 import { GymsPage } from './GymsPage';
 import { GroupEventsPage } from './GroupEventsPage';
 import { AccountabilityPage } from './AccountabilityPage';
@@ -22,8 +21,6 @@ const TABS = [
   { id: 'communities',   label: 'Communities', Icon: Users         },
   { id: 'events',        label: 'Events',      Icon: Calendar      },
   { id: 'challenge',     label: 'Challenge',   Icon: Trophy        },
-  { id: 'accountability',label: 'Pairs',       Icon: UserCheck     },
-  { id: 'buddy',         label: 'Find Buddy',  Icon: UserPlus2     },
   { id: 'gyms',          label: 'Gyms',        Icon: MapPin        },
 ];
 
@@ -51,8 +48,6 @@ export function CommunityPage({ currentUser, onViewProfile, onNavigate, onFollow
         {tab === 'communities'    && <CommunitiesPage currentUser={currentUser} onNavigate={onNavigate} />}
         {tab === 'events'         && <GroupEventsPage currentUser={currentUser} />}
         {tab === 'challenge'      && <WeeklyChallengePage currentUser={currentUser} />}
-        {tab === 'accountability' && <AccountabilityPage currentUser={currentUser} />}
-        {tab === 'buddy'          && <WorkoutBuddyPage currentUser={currentUser} onNavigate={onNavigate} />}
         {tab === 'gyms'           && <GymsPage currentUser={currentUser} />}
       </div>
     </div>

@@ -1,6 +1,6 @@
 // TrainPage.tsx — Workouts + Programs + AI Workouts + Challenges + Live Mode + Weekly Recap + Marketplace
 import { useState, useEffect } from 'react';
-import { Dumbbell, BookOpen, Sparkles, Trophy, CalendarCheck, Play, AlertTriangle, X, UserCheck, ChevronRight, ShoppingBag, Radio } from 'lucide-react';
+import { Dumbbell, BookOpen, Trophy, CalendarCheck, AlertTriangle, X, UserCheck, ChevronRight } from 'lucide-react';
 import { PRTracker } from './PRTracker';
 import { ProgramBuilder } from './ProgramBuilder';
 import { WorkoutSuggestionsPage } from './WorkoutSuggestionsPage';
@@ -8,7 +8,6 @@ import { DuelsPage } from './DuelsPage';
 import { WeeklyRecapPage } from './WeeklyRecapPage';
 import { LiveWorkoutPage } from './LiveWorkoutPage';
 import { LiveStreamingPage } from './LiveStreamingPage';
-import { MarketplacePage } from './MarketplacePage';
 import { authFetch } from '../../utils/authToken';
 import { User } from '../types';
 
@@ -30,11 +29,7 @@ import { API } from '../../config';
 
 const TABS = [
   { id: 'workouts',     label: 'My Workouts',  Icon: Dumbbell      },
-  { id: 'live',         label: 'Session',       Icon: Play          },
-  { id: 'streams',      label: 'Live Streams',  Icon: Radio         },
   { id: 'programs',     label: 'Programs',      Icon: BookOpen      },
-  { id: 'marketplace',  label: 'Marketplace',   Icon: ShoppingBag   },
-  { id: 'ai',           label: 'AI Workouts',   Icon: Sparkles      },
   { id: 'challenges',   label: 'Challenges',    Icon: Trophy        },
   { id: 'recap',        label: 'Weekly Recap',  Icon: CalendarCheck },
 ];
@@ -198,7 +193,7 @@ export function TrainPage({ currentUser }: Props) {
                   onClick={() => { setTab('ai'); dismissDeload(); }}
                   className="mt-2 text-xs text-amber-300 hover:text-amber-200 font-medium flex items-center gap-1"
                 >
-                  <Sparkles className="w-3 h-3" /> Get a deload plan from AI →
+                   Get a deload plan from AI →
                 </button>
               </div>
             </div>
@@ -208,12 +203,10 @@ export function TrainPage({ currentUser }: Props) {
 
       {/* Tab content */}
       {tab === 'workouts'    && <PRTracker currentUser={currentUser} />}
-      {tab === 'live'        && <LiveWorkoutPage currentUser={currentUser} />}
-      {tab === 'streams'     && <LiveStreamingPage currentUser={currentUser} />}
+
       {tab === 'programs'    && <ProgramBuilder currentUser={currentUser} />}
-      {tab === 'marketplace' && <MarketplacePage currentUser={currentUser} />}
-      {tab === 'ai'          && <WorkoutSuggestionsPage currentUser={currentUser} />}
-      {tab === 'challenges'  && <DuelsPage currentUser={currentUser} />}
+
+
       {tab === 'recap'       && <WeeklyRecapPage currentUser={currentUser} />}
     </div>
   );
