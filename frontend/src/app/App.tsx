@@ -3,6 +3,7 @@ import { Timer } from "lucide-react";
 import { Feed }               from "./components/Feed";
 import { Login }              from "./components/auth/Login";
 import { SignUp }             from "./components/auth/SignUp";
+import { OTPVerifyScreen }    from "./components/auth/OTPVerifyScreen";
 import { LeftSidebar }        from "./components/LeftSidebar";
 import { RightSidebar }       from "./components/RightSidebar";
 import { AdminPage }          from "./components/AdminPage";
@@ -81,6 +82,7 @@ export default function App() {
   const [pendingFollowRequestCount, setPendingFollowRequestCount] = useState(0);
   const [showWelcome, setShowWelcome]                 = useState(false);
   const [showOnboarding, setShowOnboarding]           = useState(false);
+  const [pendingOTP, setPendingOTP]                   = useState<{ user: User; maskedEmail: string } | null>(null);
   const [showTimer, setShowTimer]                     = useState(false);
   const [levelUpInfo, setLevelUpInfo]                 = useState<{ level: number; totalXP: number } | null>(null);
   // hashtag state for Discover
@@ -185,13 +187,20 @@ export default function App() {
   const handleSignUp = async (data: any) => {
     try {
       const user = await signUp(data.email, data.password, data.name || data.displayName || "", data.accountType || "user");
+      // Store user but don't enter app yet — show OTP screen first
       setCurrentUser(user);
       setIsAuthenticated(true);
-      setShowWelcome(true);
-      navigateTo("feed");
+      const masked = data.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
+      setPendingOTP({ user, maskedEmail: masked });
     } catch (err: any) {
       toast.error(err.message || "Sign up failed");
     }
+  };
+
+  const handleOTPVerified = () => {
+    setPendingOTP(null);
+    setShowWelcome(true);
+    navigateTo("feed");
   };
 
   const handleLogout = async () => {
@@ -207,6 +216,20 @@ export default function App() {
   // Derived
   const hideRightSidebar = NO_RIGHT_SIDEBAR.includes(currentView);
   const isFullHeight     = FULL_HEIGHT_VIEWS.includes(currentView);
+
+  // ── OTP Verification (after signup, before entering app) ─────────────────────
+  if (pendingOTP) {
+    return (
+      <>
+        <Toaster />
+        <OTPVerifyScreen
+          email={pendingOTP.maskedEmail}
+          onVerified={handleOTPVerified}
+          onSkip={handleOTPVerified}
+        />
+      </>
+    );
+  }
 
   // ── Unauthenticated ────────────────────────────────────────────────────────
   if (!isAuthenticated) {
