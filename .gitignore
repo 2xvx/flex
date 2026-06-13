@@ -25,5 +25,8 @@ Thumbs.db
 .vscode/
 .idea/
 
+# User-uploaded files (can be large videos/images — store in cloud, not git)
+backend/uploads/
+
 # Nested git repo (stale artifact — not part of the project)
 flex/
