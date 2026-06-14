@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { Dumbbell, BookOpen, Trophy, CalendarCheck, AlertTriangle, X, UserCheck, ChevronRight } from 'lucide-react';
 import { PRTracker } from './PRTracker';
-import { WeeklyChallengePage } from './WeeklyChallengePage';
 import { ProgramBuilder } from './ProgramBuilder';
 import { WorkoutSuggestionsPage } from './WorkoutSuggestionsPage';
 import { DuelsPage } from './DuelsPage';
@@ -208,8 +207,6 @@ export function TrainPage({ currentUser }: Props) {
       {tab === 'programs'    && <ProgramBuilder currentUser={currentUser} />}
 
 
-      {tab === 'challenges'  && <WeeklyChallengePage currentUser={currentUser} />}
-      {tab === 'challenges'  && <WeeklyChallengePage currentUser={currentUser} />}
       {tab === 'recap'       && <WeeklyRecapPage currentUser={currentUser} />}
     </div>
   );

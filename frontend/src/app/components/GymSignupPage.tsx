@@ -1,10 +1,10 @@
 // GymSignupPage.tsx — Dedicated registration page for gym owners
+import { signIn } from "../../services/authService";
 import { useState } from 'react';
 import { Building2, MapPin, Phone, Globe, FileText, ArrowRight, ArrowLeft, Loader2, CheckCircle2, Dumbbell } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { API } from '../../config';
-import { signIn } from '../../../services/authService';
 
 const AMENITIES_LIST = [
   'Free Weights', 'Cardio Machines', 'Weight Machines', 'Swimming Pool',
@@ -21,6 +21,7 @@ interface GymSignupPageProps {
 export function GymSignupPage({ onSuccess, onBack }: GymSignupPageProps) {
   const [step, setStep] = useState(1); // 1 = gym info, 2 = location, 3 = account
   const [loading, setLoading] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const [done, setDone] = useState(false);
 
   // Step 1 — Gym info
@@ -60,18 +61,6 @@ export function GymSignupPage({ onSuccess, onBack }: GymSignupPageProps) {
         throw new Error(err.error || 'Registration failed');
       }
       setDone(true);
-      // Auto-login the gym account
-      try {
-        await signIn(email, password);
-      } catch {}
-      if (onBack) onBack();
-      setDone(true);
-      // Auto-login the gym account
-      try {
-        await signIn(email, password);
-      } catch {}
-      if (onBack) onBack();
-      setDone(true);
       setTimeout(() => onSuccess('', email, password), 1500);
     } catch (e: any) {
       toast.error(e.message);
@@ -81,7 +70,20 @@ export function GymSignupPage({ onSuccess, onBack }: GymSignupPageProps) {
   };
 
   if (done) {
+  
+  if (registered) {
     return (
+      <div className="min-h-screen bg-[#080608] flex items-center justify-center">
+        <div className="text-center">
+          <svg className="w-16 h-16 text-emerald-400 mx-auto mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <h2 className="text-2xl font-bold text-white mb-2">Gym registered!</h2>
+          <p className="text-white/50">Signing you in…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
       <div className="min-h-screen bg-[#080608] flex items-center justify-center">
         <div className="text-center">
           <CheckCircle2 className="w-16 h-16 text-emerald-400 mx-auto mb-4" />

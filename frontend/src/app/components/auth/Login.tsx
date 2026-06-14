@@ -591,7 +591,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
               {mode === "gym" ? "Gym portal" : "Member access"}
             </p>
             <h2 style={{ fontSize: 28, fontWeight: 300, color: OW, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 4 }}>
-              {<>Welcome<br /><span style={{ fontWeight: 500, color: "#fff" }}>back.</span></>}
+              <>Welcome<br /><span style={{ fontWeight: 500, color: "#fff" }}>back.</span></>
             </h2>
             <p style={{ fontSize: 11, color: `rgba(240,235,227,0.25)` }}>
               {"Your journey continues here."}
@@ -620,7 +620,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
                   transition: "color 0.25s, border-color 0.25s",
                 }}
               >
-                {m === "member" ? "Member" : m === "gym" ? "Gym" : "Store"}
+                {m === "member" ? "Member" : "Gym"}
               </button>
             ))}
           </div>
@@ -736,13 +736,6 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
               {!submitting && <ArrowRight size={14} strokeWidth={1.5} />}
             </button>
 
-            {/* OR divider */}
-            <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "20px 0" }}>
-              <div style={{ flex: 1, height: 0.5, background: `rgba(255,255,255,0.05)` }} />
-              <span style={{ fontSize: 9, letterSpacing: 3, textTransform: "uppercase", color: `rgba(255,255,255,0.12)` }}>or</span>
-              <div style={{ flex: 1, height: 0.5, background: `rgba(255,255,255,0.05)` }} />
-            </div>
-
             {/* Footer links */}
             <div style={{ marginTop: "auto", paddingTop: 24 }}>
               <div style={{ height: 0.5, background: `rgba(255,255,255,0.04)`, marginBottom: 20 }} />
@@ -762,41 +755,6 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
                     background: "none", border: "none", cursor: "pointer",
                     fontSize: 9, letterSpacing: 2, textTransform: "uppercase",
                     color: `rgba(255,255,255,0.15)`,
-                  }}>
-                    ← Member login
-                  </button>
-                </div>
-              ) : mode === "store" ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {/* Divider with label */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ flex: 1, height: "0.5px", background: "rgba(201,169,110,0.12)" }} />
-                    <span style={{ fontSize: 9, letterSpacing: 2, textTransform: "uppercase", color: "rgba(201,169,110,0.3)" }}>New store?</span>
-                    <div style={{ flex: 1, height: "0.5px", background: "rgba(201,169,110,0.12)" }} />
-                  </div>
-                  {/* Apply CTA */}
-                  {onStoreSignup && (
-                    <button type="button" onClick={onStoreSignup} style={{
-                      width: "100%", padding: "11px 0", borderRadius: 0,
-                      background: "rgba(201,169,110,0.06)",
-                      border: "0.5px solid rgba(201,169,110,0.22)",
-                      cursor: "pointer",
-                      fontSize: 9, letterSpacing: 3, textTransform: "uppercase",
-                      color: "rgba(201,169,110,0.8)",
-                      transition: "background 0.2s",
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(201,169,110,0.12)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "rgba(201,169,110,0.06)"; }}
-                    >
-                      Apply to open a store →
-                    </button>
-                  )}
-                  {/* Back to member */}
-                  <button type="button" onClick={() => setMode("member")} style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    fontSize: 9, letterSpacing: 2, textTransform: "uppercase",
-                    color: "rgba(255,255,255,0.2)",
-                    textAlign: "center",
                   }}>
                     ← Member login
                   </button>

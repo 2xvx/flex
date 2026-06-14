@@ -146,7 +146,7 @@ export default function App() {
   const handleLogin = async (
     email: string,
     password: string,
-    mode: "member" | "gym" | "store"
+    mode: "member" | "gym"
   ) => {
     try {
       const user = await signIn(email, password);
@@ -170,11 +170,6 @@ export default function App() {
     }
   };
 
-  const handleGoogleLogin = (user: User) => {
-    setCurrentUser(user);
-    setIsAuthenticated(true);
-    navigateTo("feed");
-  };
 
   const handleSignUp = async (data: any) => {
     try {
@@ -185,9 +180,7 @@ export default function App() {
       const masked = data.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
       setPendingOTP({ user, maskedEmail: masked });
     } catch (err: any) {
-      const msg = err.message || "";
-      if (/already.in.use|email.*exists/i.test(msg)) toast.error("Email already registered — try signing in instead.");
-      else toast.error(msg || "Sign up failed");
+      toast.error(err.message || "Sign up failed");
     }
   };
 
@@ -234,7 +227,6 @@ export default function App() {
           <SignUp
             onSignUp={handleSignUp}
             onSwitchToLogin={() => setCurrentView("login")}
-            onGoogleLogin={handleGoogleLogin}
           />
         </>
       );
