@@ -143,16 +143,11 @@ export default function App() {
   };
 
   // ── Auth handlers ──────────────────────────────────────────────────────────
-  const handleLogin = async (
-    email: string,
-    password: string,
-    mode: "member" | "gym"
-  ) => {
+  const handleLogin = async (email: string, password: string) => {
     try {
       const user = await signIn(email, password);
       setCurrentUser(user);
       setIsAuthenticated(true);
-      if (mode === "gym")   { navigateTo("gym-hub");   return; }
       navigateTo("feed");
     } catch (err: any) {
       throw err; // Let Login.tsx show the inline field error
@@ -238,7 +233,6 @@ export default function App() {
           onLogin={handleLogin}
           onDemoLogin={handleDemoLogin}
           onSwitchToSignUp={() => setCurrentView("signup")}
-          onGymSignup={() => setCurrentView("gym-signup")}
         />
       </>
     );

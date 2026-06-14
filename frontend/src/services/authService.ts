@@ -37,7 +37,9 @@ export const signIn = async (email: string, password: string): Promise<User> => 
   if (!res.ok) throw new Error(data.error || 'Login failed');
   if (data.idToken)      setAuthToken(data.idToken);
   if (data.refreshToken) setRefreshToken(data.refreshToken);
-  return buildUser(data);
+  const user = buildUser(data);
+  localStorage.setItem('currentUser', JSON.stringify(user));
+  return user;
 };
 
 // ─── Sign up ──────────────────────────────────────────────────────────────────
@@ -113,7 +115,9 @@ export const demoLogin = async (accountType: 'user' | 'trainer' | 'admin'): Prom
   if (!res.ok) throw new Error(data.error || 'Demo login failed');
   if (data.idToken)      setAuthToken(data.idToken);
   if (data.refreshToken) setRefreshToken(data.refreshToken);
-  return buildUser(data);
+  const demoUser = buildUser(data);
+  localStorage.setItem('currentUser', JSON.stringify(demoUser));
+  return demoUser;
 };
 
 

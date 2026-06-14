@@ -261,19 +261,18 @@ function ForgotModal({ onClose }: { onClose: () => void }) {
 
 // ── Main Login ─────────────────────────────────────────────────────────────────
 interface LoginProps {
-  onLogin:         (email: string, password: string, mode: "member" | "gym") => Promise<void>;
+  onLogin:         (email: string, password: string) => Promise<void>;
   onSwitchToSignUp: () => void;
   onDemoLogin:     (accountType: "user" | "trainer" | "admin") => void;
-  onGymSignup?:    () => void;
 }
 
-export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: LoginProps) {
+export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
   useGlobalStyles();
 
   const [email,       setEmail]       = useState("");
   const [password,    setPassword]    = useState("");
   const [showPass,    setShowPass]    = useState(false);
-  const [mode,        setMode]        = useState<"member" | "gym">("member");
+
   const [showForgot,  setShowForgot]  = useState(false);
   const [mounted,     setMounted]     = useState(false);
   const [quoteIdx,    setQuoteIdx]    = useState(0);
@@ -299,7 +298,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
     setLoginError(null);
     setSubmitting(true);
     try {
-      await onLogin(email, password, mode);
+      await onLogin(email, password);
     } catch (err: any) {
       const msg: string = err.message || "Login failed";
       const noAccount = /not found|no user|user.+not|does not exist/i.test(msg);
@@ -418,10 +417,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
                 style={{ flexShrink: 0, filter: "drop-shadow(0 0 8px rgba(201,169,110,0.4))", animation: "luxLogoGlow 4s ease-in-out infinite" }}>
                 <polygon points="20,2 36,11 36,29 20,38 4,29 4,11" fill="rgba(201,169,110,0.07)" stroke="#c9a96e" strokeWidth="1"/>
                 <polygon points="20,9 30,15 30,25 20,31 10,25 10,15" fill="rgba(201,169,110,0.1)"/>
-                {mode === "gym"
-                  ? <><line x1="20" y1="13" x2="20" y2="27" stroke="#c9a96e" strokeWidth="1.2" strokeLinecap="round"/><line x1="13" y1="20" x2="27" y2="20" stroke="#c9a96e" strokeWidth="1.2" strokeLinecap="round"/></>
-                  : <text x="20" y="25" fontFamily="Georgia,serif" fontSize="13" fontWeight="700" fill="#c9a96e" textAnchor="middle">FX</text>
-                }
+<text x="20" y="25" fontFamily="Georgia,serif" fontSize="13" fontWeight="700" fill="#c9a96e" textAnchor="middle">FX</text>
               </svg>
               <div>
                 <p style={{ fontSize: 13, letterSpacing: 7, textTransform: "uppercase", color: `rgba(201,169,110,0.75)`, fontWeight: 400, marginBottom: 2 }}>
@@ -588,7 +584,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
           {/* ── Form heading ── */}
           <div style={{ position: "relative", zIndex: 2, marginBottom: 36 }}>
             <p style={{ fontSize: 9, letterSpacing: 4, textTransform: "uppercase", color: `rgba(201,169,110,0.5)`, marginBottom: 10 }}>
-              {mode === "gym" ? "Gym portal" : "Member access"}
+              {"Member access"}
             </p>
             <h2 style={{ fontSize: 28, fontWeight: 300, color: OW, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 4 }}>
               <>Welcome<br /><span style={{ fontWeight: 500, color: "#fff" }}>back.</span></>
@@ -605,24 +601,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
             borderBottom: `0.5px solid rgba(255,255,255,0.06)`,
             marginBottom: 32,
           }}>
-            {(["member", "gym"] as const).map((m, i, arr) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
-                style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  padding: "8px 0", marginRight: i < arr.length - 1 ? 28 : 0,
-                  marginBottom: -0.5,
-                  fontSize: 10, letterSpacing: 3, textTransform: "uppercase",
-                  color: mode === m ? G1 : `rgba(255,255,255,0.22)`,
-                  borderBottom: mode === m ? `1px solid ${G1}` : "1px solid transparent",
-                  transition: "color 0.25s, border-color 0.25s",
-                }}
-              >
-                {m === "member" ? "Member" : "Gym"}
-              </button>
-            ))}
+
           </div>
 
           {/* ── Form ── */}
@@ -732,53 +711,23 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin, onGymSignup }: L
               onMouseEnter={e => (e.currentTarget.style.background = `rgba(201,169,110,0.13)`)}
               onMouseLeave={e => (e.currentTarget.style.background = `rgba(201,169,110,0.07)`)}
             >
-              {submitting ? "Signing in…" : mode === "gym" ? "Enter Dashboard" : "Enter"}
+              {submitting ? "Signing in…" : "Enter"}
               {!submitting && <ArrowRight size={14} strokeWidth={1.5} />}
             </button>
+
 
             {/* Footer links */}
             <div style={{ marginTop: "auto", paddingTop: 24 }}>
               <div style={{ height: 0.5, background: `rgba(255,255,255,0.04)`, marginBottom: 20 }} />
-              {mode === "gym" ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "center" }}>
-                  {onGymSignup && (
-                    <button type="button" onClick={onGymSignup} style={{
-                      background: "none", border: `0.5px solid rgba(201,169,110,0.18)`,
-                      cursor: "pointer", padding: "8px 0",
-                      fontSize: 9, letterSpacing: 3, textTransform: "uppercase",
-                      color: `rgba(201,169,110,0.45)`,
-                    }}>
-                      Register your gym →
-                    </button>
-                  )}
-                  <button type="button" onClick={() => setMode("member")} style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    fontSize: 9, letterSpacing: 2, textTransform: "uppercase",
-                    color: `rgba(255,255,255,0.15)`,
-                  }}>
-                    ← Member login
-                  </button>
-                </div>
-              ) : (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <button type="button" onClick={onSwitchToSignUp} style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    fontSize: 9, letterSpacing: 2, textTransform: "uppercase",
-                    color: `rgba(201,169,110,0.4)`,
-                  }}>
-                    Create account
-                  </button>
-                  {onGymSignup && (
-                    <button type="button" onClick={() => setMode("gym")} style={{
-                      background: "none", border: "none", cursor: "pointer",
-                      fontSize: 9, letterSpacing: 2, textTransform: "uppercase",
-                      color: `rgba(255,255,255,0.15)`,
-                    }}>
-                      Gym portal →
-                    </button>
-                  )}
-                </div>
-              )}
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+                <button type="button" onClick={onSwitchToSignUp} style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: 9, letterSpacing: 2, textTransform: "uppercase",
+                  color: `rgba(201,169,110,0.4)`,
+                }}>
+                  Create account →
+                </button>
+              </div>
             </div>
           </form>
         </div>
