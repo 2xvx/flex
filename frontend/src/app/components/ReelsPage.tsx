@@ -104,7 +104,7 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: ReelsPagePr
   const [showUpload, setShowUpload]     = useState(false);
   const [videoFile, setVideoFile]       = useState<File | null>(null);
   const [videoCaption, setVideoCaption] = useState('');
-  const [videoPaused, setVideoPaused]   = useState(false);
+  const [videoPaused, setVideoPaused]   = useState(true);
   const [videoTime, setVideoTime]       = useState(0);
   const [videoProgress, setVideoProgress] = useState(0);
 
@@ -167,16 +167,21 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: ReelsPagePr
 
   // ── Auto-play + reset on reel change ──────────────────────────────────────
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      videoRef.current.play()
-        .then(() => setVideoPaused(false))
-        .catch(() => setVideoPaused(true));
-    }
-    setShowComments(false);
-    setTsComments([]);
+    setVideoPaused(true);
     setVideoTime(0);
     setVideoProgress(0);
+    setShowComments(false);
+    setTsComments([]);
+    const vid = videoRef.current;
+    if (!vid) return;
+    vid.load(); // force reload src
+    const tryPlay = () => {
+      vid.play()
+        .then(() => setVideoPaused(false))
+        .catch(() => setVideoPaused(true)); // show play button if autoplay blocked
+    };
+    vid.addEventListener('canplay', tryPlay, { once: true });
+    return () => vid.removeEventListener('canplay', tryPlay);
   }, [current]);
 
   // ── Load timestamped comments ──────────────────────────────────────────────
@@ -535,6 +540,7 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: ReelsPagePr
                 crossOrigin="anonymous"
                 muted={false}
                 onClick={togglePlay}
+                onError={() => setVideoPaused(true)}
               />
             ) : reel.image ? (
               <img src={reel.image} alt="clip" className="absolute inset-0 w-full h-full object-cover" />
