@@ -6935,6 +6935,18 @@ app.delete('/api/challenges/active', verifyToken, async (req, res) => {
   }
 });
 
+
+// ── KEEP-ALIVE — prevents Render free tier from sleeping ─────────────────────
+// Pings itself every 10 minutes so cold-start delay doesn't hit users
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
+setInterval(async () => {
+  try {
+    const http = require('http'), https = require('https');
+    const mod = SELF_URL.startsWith('https') ? https : http;
+    mod.get(`${SELF_URL}/api/health`, () => {}).on('error', () => {});
+  } catch {}
+}, 10 * 60 * 1000); // every 10 minutes
+
 // GET /api/admin/health — API status + signups today + active recently
 app.get('/api/admin/health', verifyToken, async (req, res) => {
   try {

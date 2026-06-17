@@ -6,29 +6,9 @@ import { SignUp }             from "./components/auth/SignUp";
 import { OTPVerifyScreen }    from "./components/auth/OTPVerifyScreen";
 import { LeftSidebar }        from "./components/LeftSidebar";
 import { RightSidebar }       from "./components/RightSidebar";
-import { AdminPage }          from "./components/AdminPage";
-import { ProfilePage }        from "./components/ProfilePage";
-import { NotificationsPanel } from "./components/NotificationsPanel";
-import { SettingsPage }       from "./components/SettingsPage";
-import { FollowersPage }      from "./components/FollowersPage";
 import { WelcomePage }        from "./components/WelcomePage";
-import { ReelsPage }          from "./components/ReelsPage";
-import { OnboardingChecklist }from "./components/OnboardingChecklist";
-import { PostDetailPage }     from "./components/PostDetailPage";
 import { Stories }            from "./components/Stories";
-import { WorkoutTimer }       from "./components/WorkoutTimer";
 import { OnboardingPoll }     from "./components/OnboardingPoll";
-import { SubscriptionPage }   from "./components/SubscriptionPage";
-import { DiscoverPage }       from "./components/DiscoverPage";
-import { TrainPage }          from "./components/TrainPage";
-import { HealthPage }         from "./components/HealthPage";
-import { CommunityPage }      from "./components/CommunityPage";
-import { TrainerDashboard }   from "./components/TrainerDashboard";
-import { GymDashboard }       from "./components/GymDashboard";
-import { GymSignupPage }      from "./components/GymSignupPage";
-import { GymsPage }           from "./components/GymsPage";
-import { ExplorePage }        from "./components/ExplorePage";
-import { CommunitiesPage }    from "./components/CommunitiesPage";
 import { Toaster }            from "./components/ui/sonner";
 import { toast }              from "sonner";
 import type { WorkoutPost, User } from "./types/index";
@@ -42,6 +22,29 @@ import {
 import { initPushNotifications, removePushToken } from "../services/notificationService";
 import { dailyLoginXP } from "../services/xpService";
 import XPLevelUp from "./components/XPLevelUp";
+
+// ── Lazy-loaded pages (code splitting — not needed on first paint) ──────────
+import { lazy, Suspense } from 'react';
+const AdminPage          = lazy(() => import('./components/AdminPage').then(m => ({ default: m.AdminPage })));
+const ProfilePage        = lazy(() => import('./components/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const NotificationsPanel = lazy(() => import('./components/NotificationsPanel').then(m => ({ default: m.NotificationsPanel })));
+const SettingsPage       = lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const FollowersPage      = lazy(() => import('./components/FollowersPage').then(m => ({ default: m.FollowersPage })));
+const ReelsPage          = lazy(() => import('./components/ReelsPage').then(m => ({ default: m.ReelsPage })));
+const OnboardingChecklist= lazy(() => import('./components/OnboardingChecklist').then(m => ({ default: m.OnboardingChecklist })));
+const PostDetailPage     = lazy(() => import('./components/PostDetailPage').then(m => ({ default: m.PostDetailPage })));
+const WorkoutTimer       = lazy(() => import('./components/WorkoutTimer').then(m => ({ default: m.WorkoutTimer })));
+const SubscriptionPage   = lazy(() => import('./components/SubscriptionPage').then(m => ({ default: m.SubscriptionPage })));
+const DiscoverPage       = lazy(() => import('./components/DiscoverPage').then(m => ({ default: m.DiscoverPage })));
+const TrainPage          = lazy(() => import('./components/TrainPage').then(m => ({ default: m.TrainPage })));
+const HealthPage         = lazy(() => import('./components/HealthPage').then(m => ({ default: m.HealthPage })));
+const CommunityPage      = lazy(() => import('./components/CommunityPage').then(m => ({ default: m.CommunityPage })));
+const TrainerDashboard   = lazy(() => import('./components/TrainerDashboard').then(m => ({ default: m.TrainerDashboard })));
+const GymDashboard       = lazy(() => import('./components/GymDashboard').then(m => ({ default: m.GymDashboard })));
+const GymSignupPage      = lazy(() => import('./components/GymSignupPage').then(m => ({ default: m.GymSignupPage })));
+const GymsPage           = lazy(() => import('./components/GymsPage').then(m => ({ default: m.GymsPage })));
+const ExplorePage        = lazy(() => import('./components/ExplorePage').then(m => ({ default: m.ExplorePage })));
+const CommunitiesPage    = lazy(() => import('./components/CommunitiesPage').then(m => ({ default: m.CommunitiesPage })));
 
 const FULL_HEIGHT_VIEWS = ["community", "clips"];
 
@@ -240,6 +243,7 @@ export default function App() {
 
   // ── Authenticated ──────────────────────────────────────────────────────────
   return (
+    <Suspense fallback={<div className="min-h-screen bg-[#080608] flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#c9a96e] border-t-transparent rounded-full animate-spin" /></div>}>
     <div className="min-h-screen flex flex-col" style={{ background: "#080608", color: "#f0ebe3" }}>
       <Toaster />
 
@@ -522,5 +526,6 @@ export default function App() {
       )}
 
     </div>
+    </Suspense>
   );
 }
