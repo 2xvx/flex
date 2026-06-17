@@ -288,13 +288,6 @@ export default function App() {
         }}
       />
 
-      {/* Stories strip — feed only */}
-      {currentView === "feed" && currentUser && (
-        <div className="relative z-10 border-b border-[rgba(201,169,110,0.06)]">
-          <Stories currentUser={currentUser} />
-        </div>
-      )}
-
       {/* Three-column layout */}
       <div className="flex flex-1 min-h-0 relative z-10">
 
@@ -314,6 +307,13 @@ export default function App() {
           className={`flex-1 min-w-0 ${isFullHeight ? "overflow-hidden" : "overflow-y-auto"}`}
           style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(201,169,110,0.15) transparent" }}
         >
+
+          {/* ── Stories — compact strip above feed ── */}
+          {currentView === "feed" && currentUser && (
+            <div className="border-b border-[rgba(201,169,110,0.06)] px-0">
+              <Stories currentUser={currentUser} />
+            </div>
+          )}
 
           {/* ── Feed ── */}
           {currentView === "feed" && (

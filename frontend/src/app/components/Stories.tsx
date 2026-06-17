@@ -170,7 +170,7 @@ export function Stories({ currentUser }: Props) {
   return (
     <>
       {/* Story ring row */}
-      <div className="flex gap-3 px-1 py-2 overflow-x-auto scrollbar-hide">
+      <div className="flex gap-3 px-4 py-3 overflow-x-auto scrollbar-hide max-w-2xl">
         {/* Add story button */}
         {currentUser && (
           <button

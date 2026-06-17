@@ -3554,9 +3554,8 @@ app.get('/api/reels', async (req, res) => {
   try {
     const snap = await db.collection('posts').orderBy('createdAt','desc').limit(200).get();
     let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    // Include posts that have a video URL OR an image (video clips take priority)
-    const withMedia = docs.filter(p => p.videoUrl || p.image);
-    const result  = (withMedia.length >= 3 ? withMedia : docs).slice(0, limit);
+    // Only return posts with actual video URLs — no fallback to image/text posts
+    const result = docs.filter(p => p.videoUrl && typeof p.videoUrl === 'string' && p.videoUrl.trim() !== '').slice(0, limit);
     const enriched = await Promise.all(result.map(async p => {
       // Support both post schemas: user.id (new) and userId (old)
       const ownerId = p.user?.id || p.userId || p.authorId || '';
