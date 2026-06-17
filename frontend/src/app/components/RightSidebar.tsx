@@ -100,12 +100,14 @@ const buildLeaderboard = (posts: WorkoutPost[]) => {
 export function RightSidebar({ posts, currentUser }: RightSidebarProps) {
   const [streak, setStreak] = useState(0);
   const [countdown, setCountdown] = useState(getTimeUntilEndOfMonth());
+  const [activeChallenge, setActiveChallenge] = useState<{ title: string; description?: string; endsAt?: string } | null>(null);
 
   // Fetch authoritative streak from backend
   useEffect(() => {
     if (!currentUser?.id) return;
     const token = localStorage.getItem('fitconnect_id_token');
-    fetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/update-streak`, {
+    const apiHost = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+    fetch(`${apiHost}/api/users/${currentUser.id}/update-streak`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     })
@@ -113,6 +115,15 @@ export function RightSidebar({ posts, currentUser }: RightSidebarProps) {
       .then(d => { if (typeof d.streakDays === 'number') setStreak(d.streakDays); })
       .catch(() => setStreak(calcStreak(posts, currentUser?.id)));
   }, [currentUser?.id, posts.length]);
+
+  // Fetch active challenge set by admin
+  useEffect(() => {
+    const apiHost = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+    fetch(`${apiHost}/api/challenges/active`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.challenge) setActiveChallenge(d.challenge); })
+      .catch(() => {});
+  }, []);
 
   // Live countdown — ticks every second
   useEffect(() => {
@@ -190,49 +201,45 @@ export function RightSidebar({ posts, currentUser }: RightSidebarProps) {
         </div>
       </div>
 
-      {/* ══ 2. CHALLENGE COUNTDOWN ══════════════════════════════════════════════ */}
-      <div className="rounded-2xl border border-[rgba(201,169,110,0.08)] p-4"
-        style={{ background: '#0d0b08' }}>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-white/35 text-[10px] uppercase tracking-widest font-medium">
-            May challenge
-          </p>
-          <span className="text-[9px] text-[#c9a96e] bg-[rgba(201,169,110,0.1)] border border-[rgba(201,169,110,0.18)] rounded-full px-2 py-0.5">
-            {countdown.totalDays}d left
-          </span>
+      {/* ══ 2. CHALLENGE COUNTDOWN — only shown when admin sets an active challenge ══ */}
+      {activeChallenge && (
+        <div className="rounded-2xl border border-[rgba(201,169,110,0.08)] p-4"
+          style={{ background: '#0d0b08' }}>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-white/35 text-[10px] uppercase tracking-widest font-medium">
+              {activeChallenge.title}
+            </p>
+            <span className="text-[9px] text-[#c9a96e] bg-[rgba(201,169,110,0.1)] border border-[rgba(201,169,110,0.18)] rounded-full px-2 py-0.5">
+              {countdown.totalDays}d left
+            </span>
+          </div>
+          <div className="flex items-center justify-center gap-2 py-1">
+            <div className="text-center">
+              <div className="bg-[rgba(201,169,110,0.06)] border border-[rgba(201,169,110,0.1)] rounded-xl px-3 py-2 min-w-[44px]">
+                <span className="text-2xl font-bold text-[#c9a96e] tabular-nums">{pad(countdown.totalDays)}</span>
+              </div>
+              <p className="text-white/25 text-[9px] mt-1 text-center">days</p>
+            </div>
+            <span className="text-[#c9a96e]/40 text-xl font-bold pb-4">:</span>
+            <div className="text-center">
+              <div className="bg-[rgba(201,169,110,0.06)] border border-[rgba(201,169,110,0.1)] rounded-xl px-3 py-2 min-w-[44px]">
+                <span className="text-2xl font-bold text-[#c9a96e] tabular-nums">{pad(countdown.h)}</span>
+              </div>
+              <p className="text-white/25 text-[9px] mt-1 text-center">hrs</p>
+            </div>
+            <span className="text-[#c9a96e]/40 text-xl font-bold pb-4">:</span>
+            <div className="text-center">
+              <div className="bg-[rgba(201,169,110,0.06)] border border-[rgba(201,169,110,0.1)] rounded-xl px-3 py-2 min-w-[44px]">
+                <span className="text-2xl font-bold text-[#c9a96e] tabular-nums">{pad(countdown.m)}</span>
+              </div>
+              <p className="text-white/25 text-[9px] mt-1 text-center">min</p>
+            </div>
+          </div>
+          {activeChallenge.description && (
+            <p className="text-white/20 text-[10px] text-center mt-2">{activeChallenge.description}</p>
+          )}
         </div>
-
-        {/* Countdown digits */}
-        <div className="flex items-center justify-center gap-2 py-1">
-          {/* Days */}
-          <div className="text-center">
-            <div className="bg-[rgba(201,169,110,0.06)] border border-[rgba(201,169,110,0.1)] rounded-xl px-3 py-2 min-w-[44px]">
-              <span className="text-2xl font-bold text-[#c9a96e] tabular-nums">{pad(countdown.totalDays)}</span>
-            </div>
-            <p className="text-white/25 text-[9px] mt-1 text-center">days</p>
-          </div>
-          <span className="text-[#c9a96e]/40 text-xl font-bold pb-4">:</span>
-          {/* Hours */}
-          <div className="text-center">
-            <div className="bg-[rgba(201,169,110,0.06)] border border-[rgba(201,169,110,0.1)] rounded-xl px-3 py-2 min-w-[44px]">
-              <span className="text-2xl font-bold text-[#c9a96e] tabular-nums">{pad(countdown.h)}</span>
-            </div>
-            <p className="text-white/25 text-[9px] mt-1 text-center">hrs</p>
-          </div>
-          <span className="text-[#c9a96e]/40 text-xl font-bold pb-4">:</span>
-          {/* Minutes */}
-          <div className="text-center">
-            <div className="bg-[rgba(201,169,110,0.06)] border border-[rgba(201,169,110,0.1)] rounded-xl px-3 py-2 min-w-[44px]">
-              <span className="text-2xl font-bold text-[#c9a96e] tabular-nums">{pad(countdown.m)}</span>
-            </div>
-            <p className="text-white/25 text-[9px] mt-1 text-center">min</p>
-          </div>
-        </div>
-
-        <p className="text-white/20 text-[10px] text-center mt-2">
-          Until the challenge ends — keep pushing!
-        </p>
-      </div>
+      )}
 
       {/* ══ 3. NEXT WORKOUT ═════════════════════════════════════════════════════ */}
       <div className="rounded-2xl border border-[rgba(201,169,110,0.08)] p-4"

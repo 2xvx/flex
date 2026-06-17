@@ -6884,6 +6884,57 @@ app.delete('/api/gyms/:id/nutrition/:nid', verifyToken, async (req, res) => {
 // ADMIN — PLATFORM HEALTH & MODERATION QUEUE
 // ============================================================
 
+
+// GET /api/challenges/active — returns the current active challenge set by admin (or empty)
+app.get('/api/challenges/active', async (req, res) => {
+  try {
+    const snap = await db.collection('challenges')
+      .where('active', '==', true)
+      .orderBy('createdAt', 'desc')
+      .limit(1).get();
+    if (snap.empty) return res.json({ challenge: null });
+    const data = snap.docs[0].data();
+    res.json({ challenge: { id: snap.docs[0].id, title: data.title, description: data.description, endsAt: data.endsAt } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/challenges — admin creates a challenge
+app.post('/api/challenges', verifyToken, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.uid).get();
+    if (userDoc.data()?.accountType !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const { title, description, endsAt } = req.body;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    // Deactivate any existing active challenges
+    const existing = await db.collection('challenges').where('active', '==', true).get();
+    const batch = db.batch();
+    existing.docs.forEach(d => batch.update(d.ref, { active: false }));
+    const newRef = db.collection('challenges').doc();
+    batch.set(newRef, { title, description: description || '', endsAt: endsAt || null, active: true, createdAt: new Date().toISOString(), createdBy: req.uid });
+    await batch.commit();
+    res.json({ id: newRef.id, title });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DELETE /api/challenges/active — admin deactivates the current challenge
+app.delete('/api/challenges/active', verifyToken, async (req, res) => {
+  try {
+    const userDoc = await db.collection('users').doc(req.uid).get();
+    if (userDoc.data()?.accountType !== 'admin') return res.status(403).json({ error: 'Admin only' });
+    const snap = await db.collection('challenges').where('active', '==', true).get();
+    const batch = db.batch();
+    snap.docs.forEach(d => batch.update(d.ref, { active: false }));
+    await batch.commit();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/admin/health — API status + signups today + active recently
 app.get('/api/admin/health', verifyToken, async (req, res) => {
   try {
