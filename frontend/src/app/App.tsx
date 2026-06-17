@@ -168,8 +168,8 @@ export default function App() {
 
   const handleSignUp = async (data: any) => {
     try {
-      const user = await signUp(data.email, data.password, data.name || data.displayName || "", data.accountType || "user");
-      // Store user but don't enter app yet — show OTP screen first
+      // SignUp form already created the account — just sign in to get the auth token
+      const user = await signIn(data.email, data.password);
       setCurrentUser(user);
       setIsAuthenticated(true);
       const masked = data.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
