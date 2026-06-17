@@ -3637,6 +3637,12 @@ app.get('/api/check-username/:username', async (req, res) => {
   try {
     const username = req.params.username.toLowerCase().trim();
     if (!username || username.length < 3) return res.json({ available: false });
+    const snap = await db.collection('users').where('username', '==', username).limit(1).get();
+    res.json({ available: snap.empty });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // GET /api/resolve-username/:username — return email for a given username (for username login)
 app.get('/api/resolve-username/:username', async (req, res) => {
@@ -3649,13 +3655,6 @@ app.get('/api/resolve-username/:username', async (req, res) => {
     if (snap.empty) return res.status(404).json({ error: 'No account found with that username' });
     const userData = snap.docs[0].data();
     res.json({ email: userData.email });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-    const snap = await db.collection('users').where('username', '==', username).limit(1).get();
-    res.json({ available: snap.empty });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
