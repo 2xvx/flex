@@ -293,14 +293,6 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
     return () => clearInterval(id);
   }, []);
 
-  // Rotate ticker every 3 s
-  useEffect(() => {
-    const id = setInterval(() => {
-      setTickerIdx(i => (i + 1) % TICKER.length);
-    }, 3000);
-    return () => clearInterval(id);
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);

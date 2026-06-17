@@ -6,7 +6,6 @@
 //   4. Leaderboard — compact top-3 ranked by likes
 
 import { WorkoutPost, User } from '../types';
-import { API } from '../../config';
 import { Trophy, Flame, Calendar, ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -106,7 +105,7 @@ export function RightSidebar({ posts, currentUser }: RightSidebarProps) {
   useEffect(() => {
     if (!currentUser?.id) return;
     const token = localStorage.getItem('fitconnect_id_token');
-    fetch(`${API}/users/${currentUser.id}/update-streak`, {
+    fetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/update-streak`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     })
@@ -309,4 +308,9 @@ export function RightSidebar({ posts, currentUser }: RightSidebarProps) {
               );
             })}
           </div>
-       
+        )}
+      </div>
+
+    </div>
+  );
+}

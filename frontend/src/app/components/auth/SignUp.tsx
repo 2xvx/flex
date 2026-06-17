@@ -16,7 +16,7 @@ export interface SignUpData {
   location?: string;
   specialty?: string;
   bio?: string;
-  username?: string;
+  username: string;
 }
 
 const TRAINER_SPECIALTIES = [
@@ -93,11 +93,10 @@ export function SignUp({ onSignUp, onSwitchToLogin }: SignUpProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agreed)              return toast.error("Please agree to the terms first");
-    if (!username || username.length < 3) return toast.error("Please choose a username (min 3 characters)");
-    if (unAvail)              return toast.error("That username is already taken — pick another");
-    if (unChecking)           return toast.error("Still checking username, please wait…");
     if (password !== confirm) return toast.error("Passwords don't match");
     if (password.length < 8)  return toast.error("Password must be at least 8 characters");
+    if (!username || username.length < 3)     return toast.error("Username must be at least 3 characters");
+    if (unAvail)                               return toast.error("That username is already taken");
     if (accountType === "trainer" && !specialty) return toast.error("Please select your specialty");
 
     setLoading(true);
@@ -229,31 +228,24 @@ export function SignUp({ onSignUp, onSwitchToLogin }: SignUpProps) {
               <input type="email" className="su-input" style={{ ...inputStyle, paddingLeft: 38 }} placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
             </div>
           </div>
-          {/* Username */}
-          <div>
-            <label style={{ fontSize: 10, color: "rgba(240,235,227,0.35)", letterSpacing: 1.2, textTransform: "uppercase", display: "block", marginBottom: 6 }}>
-              Username <span style={{ color: "rgba(239,68,68,0.6)" }}>*</span>
-            </label>
-            <div style={{ position: "relative" }}>
-              <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(201,169,110,0.4)", pointerEvents: "none" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
+              {/* Username */}
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(201,169,110,0.4)", pointerEvents: "none" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
+                </div>
+                <input
+                  type="text"
+                  className="su-input"
+                  style={{ ...inputStyle, paddingLeft: 38, paddingRight: unAvail ? 90 : 38, borderColor: unAvail ? "rgba(239,68,68,0.4)" : username.length >= 3 && !unAvail && !unChecking ? "rgba(34,197,94,0.4)" : "rgba(201,169,110,0.12)" }}
+                  placeholder="e.g. flex_athlete"
+                  value={username}
+                  onChange={e => checkUsername(e.target.value)}
+                  autoComplete="username"
+                />
+                {unChecking && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(201,169,110,0.5)" }}>checking…</span>}
+                {!unChecking && unAvail && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(239,68,68,0.7)" }}>taken</span>}
+                {!unChecking && !unAvail && username.length >= 3 && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(34,197,94,0.7)" }}>✓</span>}
               </div>
-              <input
-                type="text"
-                className="su-input"
-                style={{ ...inputStyle, paddingLeft: 38, paddingRight: 100, borderColor: unAvail ? "rgba(239,68,68,0.4)" : username.length >= 3 && !unAvail && !unChecking ? "rgba(34,197,94,0.4)" : "rgba(201,169,110,0.12)" }}
-                placeholder="e.g. flex_athlete"
-                value={username}
-                onChange={e => checkUsername(e.target.value)}
-                autoComplete="username"
-                required
-              />
-              {unChecking && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(201,169,110,0.5)" }}>checking…</span>}
-              {!unChecking && unAvail && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(239,68,68,0.7)" }}>taken ✗</span>}
-              {!unChecking && !unAvail && username.length >= 3 && <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "rgba(34,197,94,0.7)" }}>available ✓</span>}
-            </div>
-            {username.length > 0 && username.length < 3 && <p style={{ fontSize: 10, color: "rgba(239,68,68,0.6)", marginTop: 4 }}>Min 3 characters</p>}
-          </div>
 
 
           {/* Password */}
@@ -336,13 +328,13 @@ export function SignUp({ onSignUp, onSwitchToLogin }: SignUpProps) {
           </div>
 
           {/* Submit */}
-          <button type="submit" disabled={!agreed || loading || pwMiss || unAvail || unChecking || username.length < 3} style={{
+          <button type="submit" disabled={!agreed || loading || pwMiss} style={{
             width: "100%", padding: "13px",
-            background: agreed && !loading && !pwMiss && !unAvail && username.length >= 3 ? "linear-gradient(135deg,#c9a96e 0%,#a07840 100%)" : "rgba(201,169,110,0.1)",
+            background: agreed && !loading && !pwMiss ? "linear-gradient(135deg,#c9a96e 0%,#a07840 100%)" : "rgba(201,169,110,0.1)",
             border: "none", borderRadius: 12,
-            color: agreed && !loading && !pwMiss && !unAvail && username.length >= 3 ? "#fff" : "rgba(240,235,227,0.22)",
+            color: agreed && !loading && !pwMiss ? "#fff" : "rgba(240,235,227,0.22)",
             fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
-            cursor: agreed && !loading && !pwMiss && !unAvail && username.length >= 3 ? "pointer" : "not-allowed",
+            cursor: agreed && !loading && !pwMiss ? "pointer" : "not-allowed",
             transition: "all 0.25s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}>
             {loading

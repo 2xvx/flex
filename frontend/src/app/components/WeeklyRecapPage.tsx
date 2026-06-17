@@ -86,7 +86,6 @@ export function WeeklyRecapPage({ currentUser }: Props) {
     try {
       const res = await authFetch(`${API}/users/${currentUser.id}/weekly-recap`);
       const data = await res.json();
-      if (!res.ok || !data.week) throw new Error(data.error || 'Invalid recap data');
       setRecap(data);
     } catch {
       toast.error('Failed to load recap');

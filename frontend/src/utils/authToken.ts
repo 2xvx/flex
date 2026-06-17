@@ -1,7 +1,6 @@
 // authToken.ts — helpers for storing and retrieving Firebase auth tokens.
 // Firebase ID tokens expire in 1 hour. We also store the refresh token so
 // we can silently get a new ID token without forcing the user to log in again.
-
 import { API } from '../config';
 
 const ID_TOKEN_KEY      = 'fitconnect_id_token';
