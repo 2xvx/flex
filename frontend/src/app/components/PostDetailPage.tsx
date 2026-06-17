@@ -139,4 +139,8 @@ export function PostDetailPage({ postId, currentUser, onBack }: PostDetailPagePr
           onShare={handleShare}
           onPostUpdated={handlePostUpdated}
           onDeletePost={() => onBack()}
-  
+        />
+      )}
+    </div>
+  );
+}

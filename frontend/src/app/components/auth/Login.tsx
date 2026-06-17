@@ -794,4 +794,15 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
               color: `rgba(201,169,110,0.55)`,
               whiteSpace: "nowrap",
             }}>
-              {TICKER[
+              {TICKER[tickerIdx % TICKER.length]}
+            </span>
+          </div>
+        </div>
+
+        {/* Right spacer */}
+        <div style={{ width: 28, flexShrink: 0 }} />
+      </div>
+
+    </div>
+  );
+}

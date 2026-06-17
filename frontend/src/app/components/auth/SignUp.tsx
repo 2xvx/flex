@@ -354,4 +354,17 @@ export function SignUp({ onSignUp, onSwitchToLogin }: SignUpProps) {
 
 
         {/* Sign in link */}
-        <div style={{ marginTop: 22, textAlign: "cen
+        <div style={{ marginTop: 22, textAlign: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <div style={{ flex: 1, height: 0.5, background: "rgba(201,169,110,0.1)" }} />
+            <span style={{ fontSize: 10, color: "rgba(240,235,227,0.2)", letterSpacing: 1, textTransform: "uppercase" }}>Already a member?</span>
+            <div style={{ flex: 1, height: 0.5, background: "rgba(201,169,110,0.1)" }} />
+          </div>
+          <button type="button" onClick={onSwitchToLogin} style={{ background: "none", border: "none", cursor: "pointer", color: G, fontSize: 13, fontWeight: 500, textDecoration: "underline", textDecorationColor: "rgba(201,169,110,0.3)" }}>
+            Sign in to your account →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

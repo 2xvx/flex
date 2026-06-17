@@ -99,4 +99,7 @@ export const uploadImage = async (
     if (!res.ok) return null;
     const data = await res.json();
     return data.url || null;
-  
+  } catch {
+    return null;
+  }
+};

@@ -396,4 +396,10 @@ function WeekDots({ workoutDays, weekStart }: { workoutDays: number; weekStart: 
           <div className={'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium transition-all ' + (
             i < workoutDays ? 'bg-[#c9a96e] text-white' : 'bg-[rgba(201,169,110,0.04)] text-white/20'
           )}>
-            {i <
+            {i < workoutDays ? '✓' : d}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
