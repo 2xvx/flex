@@ -226,7 +226,7 @@ function ForgotModal({ onClose }: { onClose: () => void }) {
                 <Mail size={14} color={`rgba(201,169,110,0.35)`} />
                 <input
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="email or @username"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required autoFocus
@@ -304,7 +304,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
       const noAccount = /not found|no user|user.+not|does not exist/i.test(msg);
       setLoginError(
         noAccount
-          ? "No account found with this email — Sign up!"
+          ? "No account found — check your email/username"
           : /password|wrong|invalid credential/i.test(msg)
           ? "Wrong password"
           : msg
@@ -610,7 +610,7 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
             {/* Email */}
             <div style={{ marginBottom: 24 }}>
               <p style={{ fontSize: 9, letterSpacing: 3, textTransform: "uppercase", color: loginError ? `rgba(239,68,68,0.7)` : `rgba(201,169,110,0.45)`, marginBottom: 12 }}>
-                Email
+                Email or Username
               </p>
               <div style={{
                 display: "flex", alignItems: "center", gap: 12,
@@ -619,8 +619,8 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
               }}>
                 <Mail size={14} color={loginError ? `rgba(239,68,68,0.5)` : `rgba(201,169,110,0.3)`} strokeWidth={1.5} />
                 <input
-                  type="email" required
-                  placeholder="you@example.com"
+                  type="text" required autoComplete="username"
+                  placeholder="email or @username"
                   value={email}
                   onChange={e => { setEmail(e.target.value); setLoginError(null); }}
                   style={{

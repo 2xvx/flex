@@ -27,7 +27,17 @@ const buildUser = (data: Record<string, unknown>): User => ({
 });
 
 // ─── Sign in ──────────────────────────────────────────────────────────────────
-export const signIn = async (email: string, password: string): Promise<User> => {
+export const signIn = async (emailOrUsername: string, password: string): Promise<User> => {
+  let email = emailOrUsername.trim();
+
+  // If no '@', treat as username — resolve to email first
+  if (!email.includes('@')) {
+    const r = await fetch(`${API}/resolve-username/${encodeURIComponent(email.toLowerCase())}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'No account found with that username');
+    email = d.email;
+  }
+
   const res = await fetch(`${API}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

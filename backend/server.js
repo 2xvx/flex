@@ -230,30 +230,34 @@ app.post('/api/upload', verifyToken, async (req, res) => {
 
 // ─── SIGN UP ──────────────────────────────────────────────────────────────────
 app.post('/api/signup', async (req, res) => {
-  const { email, password, displayName, accountType, location } = req.body;
+  const { email, password, displayName, accountType, location, username: requestedUsername, specialty, bio } = req.body;
   try {
     const userRecord = await admin.auth().createUser({ email, password, displayName });
     const passwordHash = await bcrypt.hash(password, 10);
-    // Auto-generate a clean username from displayName (fallback: email prefix)
-    const baseUsername = (displayName || email.split('@')[0])
-      .toLowerCase()
-      .replace(/[^a-z0-9_]/g, '')
-      .slice(0, 20) || 'user';
-    // Make it unique by appending random 4-digit suffix if needed
-    const existingSnap = await db.collection('users').where('username', '==', baseUsername).limit(1).get();
-    const username = existingSnap.empty
-      ? baseUsername
-      : `${baseUsername}${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Use the requested username if provided; otherwise auto-generate from displayName
+    let username = (requestedUsername || '').toLowerCase().replace(/[^a-z0-9_.]/g, '').slice(0, 30);
+    if (!username || username.length < 3) {
+      username = (displayName || email.split('@')[0]).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) || 'user';
+    }
+    // Ensure uniqueness
+    const existingSnap = await db.collection('users').where('username', '==', username).limit(1).get();
+    if (!existingSnap.empty) {
+      username = `${username}${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
     await db.collection('users').doc(userRecord.uid).set({
       email,
       displayName,
       username,
       accountType: accountType || 'user',
+      specialty: specialty || '',
+      bio: bio || '',
       location: location || '',
-      passwordHash, // bcrypt hash — never store plain text passwords
+      passwordHash,
       createdAt: new Date().toISOString(),
     });
-    res.status(201).json({ message: 'User created successfully', uid: userRecord.uid });
+    res.status(201).json({ message: 'User created successfully', uid: userRecord.uid, username });
   } catch (error) {
     console.error('Signup error:', error);
     res.status(400).json({ error: error.message });
@@ -3633,6 +3637,23 @@ app.get('/api/check-username/:username', async (req, res) => {
   try {
     const username = req.params.username.toLowerCase().trim();
     if (!username || username.length < 3) return res.json({ available: false });
+
+// GET /api/resolve-username/:username — return email for a given username (for username login)
+app.get('/api/resolve-username/:username', async (req, res) => {
+  const { username } = req.params;
+  if (!username) return res.status(400).json({ error: 'username required' });
+  try {
+    const snap = await db.collection('users')
+      .where('username', '==', username.toLowerCase())
+      .limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: 'No account found with that username' });
+    const userData = snap.docs[0].data();
+    res.json({ email: userData.email });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
     const snap = await db.collection('users').where('username', '==', username).limit(1).get();
     res.json({ available: snap.empty });
   } catch (e) {
@@ -6904,4 +6925,3 @@ app.post('/api/posts/:id/report', verifyToken, async (req, res) => {
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
