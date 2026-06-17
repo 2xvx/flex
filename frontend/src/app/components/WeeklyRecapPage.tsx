@@ -144,7 +144,7 @@ export function WeeklyRecapPage({ currentUser }: Props) {
           <h1 className="text-white font-bold text-xl">Weekly Recap</h1>
           <p className="text-white/40 text-xs mt-0.5 flex items-center gap-1">
             <Calendar className="w-3 h-3" />
-            {recap.week?.start ? fmt(recap.week.start) : ''} — {recap.week?.end ? fmt(recap.week.end) : ''}
+            {fmt(recap.week.start)} — {fmt(recap.week.end)}
           </p>
         </div>
         <button
@@ -285,7 +285,7 @@ export function WeeklyRecapPage({ currentUser }: Props) {
         {recap.totalWorkouts > 0 && (
           <div className="mt-4 pt-4 border-t border-[rgba(201,169,110,0.08)]">
             <p className="text-white/30 text-xs mb-2">Activity this week</p>
-            <WeekDots workoutDays={recap.workoutDays} weekStart={recap.week?.start ?? ''} />
+            <WeekDots workoutDays={recap.workoutDays} weekStart={recap.week.start} />
           </div>
         )}
 
@@ -396,10 +396,4 @@ function WeekDots({ workoutDays, weekStart }: { workoutDays: number; weekStart: 
           <div className={'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-medium transition-all ' + (
             i < workoutDays ? 'bg-[#c9a96e] text-white' : 'bg-[rgba(201,169,110,0.04)] text-white/20'
           )}>
-            {i < workoutDays ? '✓' : d}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+            {i <

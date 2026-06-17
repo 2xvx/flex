@@ -6904,4 +6904,3 @@ app.post('/api/posts/:id/report', verifyToken, async (req, res) => {
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-

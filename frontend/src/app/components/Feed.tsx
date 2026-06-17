@@ -425,5 +425,8 @@ export function Feed({
       <CreatePostDialog
         open={isCreateDialogOpen}
         onOpenChange={onCreateDialogChange}
-        onCreatePost={handleCreatePost}
-        currentUserId={currentU
+        currentUserId={currentUser?.id}
+      />
+    </div>
+  );
+}

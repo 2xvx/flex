@@ -95,7 +95,7 @@ export function SignUp({ onSignUp, onSwitchToLogin }: SignUpProps) {
     if (!agreed)              return toast.error("Please agree to the terms first");
     if (!username || username.length < 3) return toast.error("Please choose a username (min 3 characters)");
     if (unAvail)              return toast.error("That username is already taken — pick another");
-    if (unChecking)           return toast.error("Still checking username availability, please wait…");
+    if (unChecking)           return toast.error("Still checking username, please wait…");
     if (password !== confirm) return toast.error("Passwords don't match");
     if (password.length < 8)  return toast.error("Password must be at least 8 characters");
     if (accountType === "trainer" && !specialty) return toast.error("Please select your specialty");
@@ -241,7 +241,7 @@ export function SignUp({ onSignUp, onSwitchToLogin }: SignUpProps) {
               <input
                 type="text"
                 className="su-input"
-                style={{ ...inputStyle, paddingLeft: 38, paddingRight: 90, borderColor: unAvail ? "rgba(239,68,68,0.4)" : username.length >= 3 && !unAvail && !unChecking ? "rgba(34,197,94,0.4)" : "rgba(201,169,110,0.12)" }}
+                style={{ ...inputStyle, paddingLeft: 38, paddingRight: 100, borderColor: unAvail ? "rgba(239,68,68,0.4)" : username.length >= 3 && !unAvail && !unChecking ? "rgba(34,197,94,0.4)" : "rgba(201,169,110,0.12)" }}
                 placeholder="e.g. flex_athlete"
                 value={username}
                 onChange={e => checkUsername(e.target.value)}
@@ -354,17 +354,4 @@ export function SignUp({ onSignUp, onSwitchToLogin }: SignUpProps) {
 
 
         {/* Sign in link */}
-        <div style={{ marginTop: 22, textAlign: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <div style={{ flex: 1, height: 0.5, background: "rgba(201,169,110,0.1)" }} />
-            <span style={{ fontSize: 10, color: "rgba(240,235,227,0.2)", letterSpacing: 1, textTransform: "uppercase" }}>Already a member?</span>
-            <div style={{ flex: 1, height: 0.5, background: "rgba(201,169,110,0.1)" }} />
-          </div>
-          <button type="button" onClick={onSwitchToLogin} style={{ background: "none", border: "none", cursor: "pointer", color: G, fontSize: 13, fontWeight: 500, textDecoration: "underline", textDecorationColor: "rgba(201,169,110,0.3)" }}>
-            Sign in to your account →
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+        <div style={{ marginTop: 22, textAlign: "cen

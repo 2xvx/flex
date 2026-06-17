@@ -741,9 +741,6 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
         </div>
       </div>
 
-      {/* ════════ FORGOT PASSWORD MODAL ════════ */}
-      {showForgot && <ForgotModal onClose={() => setShowForgot(false)} />}
-
       {/* ════════ LUXURY BOTTOM BAR ════════ */}
       <div style={{
         background: `rgba(8,6,8,0.96)`,
@@ -797,15 +794,4 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
               color: `rgba(201,169,110,0.55)`,
               whiteSpace: "nowrap",
             }}>
-              {TICKER[tickerIdx % TICKER.length]}
-            </span>
-          </div>
-        </div>
-
-        {/* Right spacer */}
-        <div style={{ width: 28, flexShrink: 0 }} />
-      </div>
-
-    </div>
-  );
-}
+              {TICKER[

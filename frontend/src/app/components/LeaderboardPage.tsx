@@ -289,3 +289,4 @@ export function LeaderboardPage({ currentUser, onViewProfile }: LeaderboardPageP
     </div>
   );
 }
+               
