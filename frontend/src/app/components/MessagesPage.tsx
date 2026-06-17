@@ -203,7 +203,7 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
         try {
           const profiles = await Promise.all(
             uids.slice(0, 20).map(async (uid) => {
-              const res = await fetch(`http://192.168.1.102:5000/api/users/${uid}`);
+              const res = await fetch(`${API}/users/${uid}`);
               if (!res.ok) return null;
               const u = await res.json();
               return {
@@ -429,7 +429,7 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
   // Ping presence endpoint every 30s while the tab is active
   useEffect(() => {
     if (!currentUser) return;
-    const ping = () => authFetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/presence`, {
+    const ping = () => authFetch(`${API}/users/${currentUser.id}/presence`, {
       method: 'POST', body: JSON.stringify({ online: true }),
     }).catch(() => {});
     ping();
@@ -445,7 +445,7 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
       setOtherUserPresence(null); return;
     }
     const uid = activeConv.otherUser.uid;
-    fetch(`http://192.168.1.102:5000/api/users/${uid}/presence`)
+    fetch(`${API}/users/${uid}/presence`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setOtherUserPresence(d); })
       .catch(() => {});

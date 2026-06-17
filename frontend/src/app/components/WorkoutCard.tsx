@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { API } from '../../config';
 import { compressBase64 } from '../../utils/imageCompression';
 import { Heart, MessageCircle, Dumbbell, Flame, Clock, MoreVertical, Share2, Repeat2, Send, ImagePlus, X, UserPlus, UserCheck, Pencil, Trash2, CornerDownRight, ExternalLink, Bookmark, BookmarkCheck, Music, Trophy, Copy, TrendingUp, UtensilsCrossed, Timer, Scale, Zap, Wheat, Droplets } from 'lucide-react';
 import { WorkoutPost } from '../types';
@@ -99,7 +100,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
     // Also call legacy onLike when toggling the heart reaction (keeps feed counts in sync)
     if (type === 'heart') onLike?.(post.id);
     try {
-      await authFetch(`http://192.168.1.102:5000/api/posts/${post.id}/react`, {
+      await authFetch(`${API}/posts/${post.id}/react`, {
         method: 'POST',
         body: JSON.stringify({ reactionType: isToggleOff ? null : type }),
       });
@@ -132,7 +133,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
     const next = !isSaved;
     setIsSaved(next);
     try {
-      await authFetch(`http://192.168.1.102:5000/api/posts/${post.id}/save`, {
+      await authFetch(`${API}/posts/${post.id}/save`, {
         method: 'POST',
         });
       toast.success(next ? 'Post saved! 🔖' : 'Removed from saved');
@@ -177,7 +178,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
     );
     onPostUpdated?.(post.id, { comments: updatedComments });
     try {
-      const res = await fetch(`http://192.168.1.102:5000/api/posts/${post.id}/comments/${commentId}/reply`, {
+      const res = await fetch(`${API}/posts/${post.id}/comments/${commentId}/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, user: { id: resolvedUserId } }),
@@ -200,7 +201,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
   const handleDelete = async () => {
     if (!window.confirm('Delete this post? This cannot be undone.')) return;
     try {
-      const res = await authFetch(`http://192.168.1.102:5000/api/posts/${post.id}`, {
+      const res = await authFetch(`${API}/posts/${post.id}`, {
         method: 'DELETE',
       });
       if (!res.ok) throw new Error('Failed to delete');
@@ -364,7 +365,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
               <>
                 <DropdownMenuItem
                   onClick={async () => {
-                    await authFetch(`http://192.168.1.102:5000/api/users/${post.user.id}/mute`, { method: 'POST', });
+                    await authFetch(`${API}/users/${post.user.id}/mute`, { method: 'POST', });
                     toast.success(`@${post.user.username} muted`);
                   }}
                   className="text-white/70 hover:text-white"
@@ -374,7 +375,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
                 <DropdownMenuItem
                   onClick={async () => {
                     if (!confirm(`Block @${post.user.username}? Their posts will be hidden from your feed.`)) return;
-                    await authFetch(`http://192.168.1.102:5000/api/users/${post.user.id}/block`, { method: 'POST', });
+                    await authFetch(`${API}/users/${post.user.id}/block`, { method: 'POST', });
                     toast.success(`@${post.user.username} blocked`);
                   }}
                   className="text-red-400 hover:text-red-300 focus:text-red-300"

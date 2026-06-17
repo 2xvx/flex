@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Trophy, Flame, Heart, Dumbbell, Users, Crown, Medal, Star } from 'lucide-react';
+import { API } from '../../config';
 import { User } from '../types';
 import { getLeaderboard, getHallOfFame, LeaderboardCategory } from '../../services/leaderboardService';
 import { toast } from 'sonner';
@@ -89,7 +90,7 @@ export function LeaderboardPage({ currentUser, onViewProfile }: LeaderboardPageP
   useEffect(() => {
     if (!currentUser?.id) return;
     import('../../utils/authToken').then(({ authFetch }) => {
-      authFetch(`${(window as any).__API__ || 'http://localhost:5000/api'}/users/${currentUser.id}/following`)
+      authFetch(`${API}/users/${currentUser.id}/following`)
         .then(r => r.json())
         .then((data: string[]) => setFollowing(new Set(data)))
         .catch(() => {});

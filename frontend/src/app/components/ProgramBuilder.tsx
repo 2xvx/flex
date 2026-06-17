@@ -74,7 +74,7 @@ export function ProgramBuilder({ currentUser }: Props) {
   const fetchActiveProgram = async () => {
     if (!currentUser) return;
     try {
-      const res = await authFetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/profile`);
+      const res = await authFetch(`${API}/users/${currentUser.id}/profile`);
       if (res.ok) { const d = await res.json(); setActiveProgram(d.activeProgram || null); }
     } catch {}
   };
@@ -84,7 +84,7 @@ export function ProgramBuilder({ currentUser }: Props) {
     setSettingActive(true);
     try {
       const isAlready = activeProgram?.programId === prog.id;
-      await authFetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/active-program`, {
+      await authFetch(`${API}/users/${currentUser.id}/active-program`, {
         method: 'PATCH',
         body: JSON.stringify(isAlready ? { programId: null } : { programId: prog.id, programName: prog.name, currentWeek: 0, currentDay: 0 }),
       });
@@ -103,7 +103,7 @@ export function ProgramBuilder({ currentUser }: Props) {
     let nextWeek = activeProgram.currentWeek;
     let nextDay  = activeProgram.currentDay + 1;
     if (nextDay >= daysInWeek) { nextDay = 0; nextWeek = Math.min(nextWeek + 1, totalWeeks - 1); }
-    await authFetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/active-program/progress`, {
+    await authFetch(`${API}/users/${currentUser.id}/active-program/progress`, {
       method: 'PATCH', body: JSON.stringify({ currentWeek: nextWeek, currentDay: nextDay }),
     });
     setActiveProgram(ap => ap ? { ...ap, currentWeek: nextWeek, currentDay: nextDay } : ap);

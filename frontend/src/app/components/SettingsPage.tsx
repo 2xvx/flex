@@ -309,7 +309,7 @@ export function SettingsPage({ currentUser }: SettingsPageProps) {
     if (!currentUser) return;
     setDeletingAccount(true);
     try {
-      const res = await fetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/account`, {
+      const res = await fetch(`${API}/users/${currentUser.id}/account`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('fitconnect_id_token')}` },
       });

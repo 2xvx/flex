@@ -120,43 +120,6 @@ export const demoLogin = async (accountType: 'user' | 'trainer' | 'admin'): Prom
   return demoUser;
 };
 
-
-// ─── Google sign-in ───────────────────────────────────────────────────────────
-export const signInWithGoogle = async (): Promise<User> => {
-  const { initializeApp, getApps, getApp } = await import('firebase/app');
-  const { getAuth, GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
-
-  const FB_CONFIG = {
-    apiKey:     'AIzaSyDYIbJ010CGwWqBLtv4j_TqA6l31HJUrEU',
-    authDomain: 'fitconnect-937d0.firebaseapp.com',
-    projectId:  'fitconnect-937d0',
-  };
-  const app      = getApps().length ? getApp() : initializeApp(FB_CONFIG);
-  const auth     = getAuth(app);
-  const provider = new GoogleAuthProvider();
-
-  const result  = await signInWithPopup(auth, provider);
-  const idToken = await result.user.getIdToken();
-  setAuthToken(idToken);
-
-  // Upsert user profile in our backend
-  const res  = await fetch(`${API}/google-auth`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-    body:    JSON.stringify({
-      uid:         result.user.uid,
-      displayName: result.user.displayName || result.user.email?.split('@')[0] || 'User',
-      email:       result.user.email,
-      avatar:      result.user.photoURL || '',
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Google sign-in failed');
-  if (data.idToken)      setAuthToken(data.idToken);
-  if (data.refreshToken) setRefreshToken(data.refreshToken);
-  return buildUser({ ...data, idToken });
-};
-
 // ─── Sign out ─────────────────────────────────────────────────────────────────
 export const signOut = async (): Promise<void> => {
   clearAuthToken();

@@ -2,6 +2,8 @@
 // Firebase ID tokens expire in 1 hour. We also store the refresh token so
 // we can silently get a new ID token without forcing the user to log in again.
 
+import { API } from '../config';
+
 const ID_TOKEN_KEY      = 'fitconnect_id_token';
 const REFRESH_TOKEN_KEY = 'fitconnect_refresh_token';
 
@@ -22,7 +24,7 @@ export const refreshIdToken = async (): Promise<string | null> => {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
   try {
-    const res = await fetch('http://192.168.1.102:5000/api/refresh-token', {
+    const res = await fetch(`${API}/refresh-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
@@ -90,14 +92,11 @@ export const uploadImage = async (
   folder: string = 'posts',
 ): Promise<string | null> => {
   try {
-    const res = await authFetch('http://192.168.1.102:5000/api/upload', {
+    const res = await authFetch(`${API}/upload`, {
       method: 'POST',
       body: JSON.stringify({ base64, folder }),
     });
     if (!res.ok) return null;
     const data = await res.json();
     return data.url || null;
-  } catch {
-    return null;
-  }
-};
+  

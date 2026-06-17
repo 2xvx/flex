@@ -127,13 +127,11 @@ app.post('/api/login',  authLimiter);
 app.post('/api/signup', authLimiter);
 
 // ─── Firebase init ────────────────────────────────────────────────────────────
-// Media (images + videos) are stored on the local filesystem under backend/uploads/
-// and served as static files — no Firebase Storage setup required.
-
 try {
   if (!admin.apps.length) {
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
+      credential:    admin.credential.cert(serviceAccount),
+      storageBucket: 'fitconnect-937d0.firebasestorage.app',
     });
     console.log('✅ Firebase Admin initialized');
   }
@@ -142,7 +140,8 @@ try {
   process.exit(1);
 }
 
-const db = admin.firestore();
+const db     = admin.firestore();
+const bucket = admin.storage().bucket();
 
 // ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────────
 // Verifies the Firebase ID token sent as "Authorization: Bearer <token>".
@@ -209,21 +208,19 @@ app.post('/api/upload', verifyToken, async (req, res) => {
   if (!base64) return res.status(400).json({ error: 'base64 required' });
 
   try {
-    // Strip the data URL prefix (data:image/jpeg;base64,...)
     const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
     if (!matches) return res.status(400).json({ error: 'Invalid base64 format' });
     const mimeType = matches[1];
     const buffer   = Buffer.from(matches[2], 'base64');
     const ext      = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
     const name     = filename || `${Date.now()}_${Math.random().toString(36).substr(2, 8)}.${ext}`;
+    const filepath = `${folder}/${req.uid}/${name}`;
 
-    // Save to local filesystem (same pattern as video upload — no Firebase Storage needed)
-    const fss2     = require('fs');
-    const pathMod2 = require('path');
-    const imgDir   = pathMod2.join(__dirname, 'uploads', folder);
-    if (!fss2.existsSync(imgDir)) fss2.mkdirSync(imgDir, { recursive: true });
-    fss2.writeFileSync(pathMod2.join(imgDir, name), buffer);
-    const url = `${req.protocol}://${req.get('host')}/uploads/${folder}/${name}`;
+    const fileRef = bucket.file(filepath);
+    await fileRef.save(buffer, { metadata: { contentType: mimeType } });
+    await fileRef.makePublic();
+
+    const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filepath)}?alt=media`;
     res.json({ url });
   } catch (e) {
     console.error('Upload failed:', e.message);
@@ -269,35 +266,56 @@ app.post('/api/signup', async (req, res) => {
 app.post('/api/forgot-password', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
-  if (!FIREBASE_WEB_API_KEY || FIREBASE_WEB_API_KEY === 'your_firebase_web_api_key_here') {
-    return res.status(500).json({ error: 'Server not configured for password reset' });
-  }
   try {
-    // Verify the email actually exists in Firebase Auth first so we can return
-    // a clear error instead of silently sending nothing.
+    // Verify user exists first
     await admin.auth().getUserByEmail(email);
 
-    // Ask Firebase to send the reset email via the REST API.
-    const fbRes = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_WEB_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
-      }
-    );
-    if (!fbRes.ok) {
-      const err = await fbRes.json();
-      throw new Error(err?.error?.message || 'Failed to send reset email');
+    // Generate a password reset link using Admin SDK (no web API key needed)
+    const resetLink = await admin.auth().generatePasswordResetLink(email);
+
+    // Send via Brevo SMTP if credentials are set; otherwise fall back to Firebase REST API
+    const BREVO_USER = process.env.BREVO_SMTP_USER;
+    const BREVO_KEY  = process.env.BREVO_SMTP_KEY;
+
+    if (BREVO_USER && BREVO_KEY) {
+      const nodemailer = require('nodemailer');
+      const transporter = nodemailer.createTransport({
+        host: 'smtp-relay.brevo.com',
+        port: 587,
+        secure: false,
+        auth: { user: BREVO_USER, pass: BREVO_KEY },
+      });
+      await transporter.sendMail({
+        from: `"${process.env.BREVO_FROM_NAME || 'Flex'}" <${process.env.BREVO_FROM_EMAIL || BREVO_USER}>`,
+        to: email,
+        subject: 'Reset your Flex password',
+        html: `
+          <div style="font-family:sans-serif;max-width:480px;margin:auto;background:#080608;color:#f0ebe3;padding:32px;border-radius:12px">
+            <h2 style="color:#c9a96e;margin-bottom:8px">Reset your password</h2>
+            <p style="color:rgba(240,235,227,0.6);margin-bottom:24px">Click the button below to set a new password. This link expires in 1 hour.</p>
+            <a href="${resetLink}" style="display:inline-block;background:linear-gradient(135deg,#c9a96e,#a07840);color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Reset Password</a>
+            <p style="color:rgba(240,235,227,0.3);font-size:11px;margin-top:24px">If you didn't request this, you can safely ignore this email.</p>
+          </div>
+        `,
+      });
+    } else if (FIREBASE_WEB_API_KEY && FIREBASE_WEB_API_KEY !== 'your_firebase_web_api_key_here') {
+      // Fall back to Firebase REST API
+      const fbRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_WEB_API_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }) }
+      );
+      if (!fbRes.ok) { const err = await fbRes.json(); throw new Error(err?.error?.message || 'Firebase error'); }
+    } else {
+      throw new Error('Email service not configured');
     }
+
     res.json({ message: 'Password reset email sent' });
   } catch (error) {
-    // Don't reveal whether the email exists to prevent enumeration attacks,
-    // but still return a useful message for known error codes.
     const msg = error.message || '';
     if (msg.includes('USER_NOT_FOUND') || msg.includes('auth/user-not-found')) {
       return res.status(404).json({ error: 'No account found with this email address.' });
     }
+    console.error('forgot-password error:', msg);
     res.status(500).json({ error: 'Failed to send reset email. Please try again.' });
   }
 });
@@ -411,30 +429,15 @@ app.post('/api/refresh-token', async (req, res) => {
 // ─── VIDEO UPLOAD (local filesystem) ─────────────────────────────────────────
 // POST /api/upload-video
 // Accepts multipart/form-data with field "video".
-// Saves the file to backend/uploads/videos/ and serves it as a static URL.
-// No Firebase Storage required — works out of the box.
+// Streams the file directly to Firebase Storage and returns a public URL.
 // Returns: { url: string }
 
-const multer = require('multer');
-const fss    = require('fs');
+const multer  = require('multer');
 const pathMod = require('path');
 
-// Ensure the uploads directory exists
-const UPLOADS_DIR = pathMod.join(__dirname, 'uploads', 'videos');
-if (!fss.existsSync(UPLOADS_DIR)) fss.mkdirSync(UPLOADS_DIR, { recursive: true });
-
-// Serve uploaded videos as static files
-app.use('/uploads', require('express').static(pathMod.join(__dirname, 'uploads')));
-
+// Keep video in memory so we can pipe it to Firebase Storage
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-    filename:    (_req, file, cb) => {
-      const ext  = (file.originalname.split('.').pop() || 'mp4').toLowerCase().replace('quicktime', 'mov');
-      const name = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      cb(null, name);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
   fileFilter: (_req, file, cb) => {
     const ok = /^video\//.test(file.mimetype) ||
@@ -444,14 +447,23 @@ const upload = multer({
   },
 });
 
-app.post('/api/upload-video', verifyToken, upload.single('video'), (req, res) => {
+app.post('/api/upload-video', verifyToken, upload.single('video'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No video file provided' });
-    // Build a public URL the browser can stream directly
-    const protocol = req.protocol;
-    const host     = req.get('host'); // e.g. localhost:5000
-    const url      = `${protocol}://${host}/uploads/videos/${req.file.filename}`;
-    console.log('✅ Video uploaded:', req.file.filename, `(${(req.file.size / 1024 / 1024).toFixed(1)} MB)`);
+
+    const ext      = (req.file.originalname.split('.').pop() || 'mp4')
+                       .toLowerCase().replace('quicktime', 'mov');
+    const filename = `videos/${req.uid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const fileRef  = bucket.file(filename);
+
+    await fileRef.save(req.file.buffer, {
+      metadata: { contentType: req.file.mimetype || `video/${ext}` },
+    });
+    await fileRef.makePublic();
+
+    const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filename)}?alt=media`;
+    console.log('✅ Video uploaded to Firebase Storage:', filename,
+      `(${(req.file.size / 1024 / 1024).toFixed(1)} MB)`);
     res.json({ url });
   } catch (e) {
     console.error('Video upload error:', e);
@@ -3285,25 +3297,37 @@ app.get('/api/conversations', verifyToken, async (req, res) => {
 
     if (storedIds.length > 0) {
       // Fetch by ID — no index, no query
-      const refs = storedIds.slice(0, 50).map(id => db.collection('conversations').doc(id));
-      const snaps = await db.getAll(...refs);
-      docs = snaps.filter(s => s.exists);
+      try {
+        const refs = storedIds.slice(0, 50).map(id => db.collection('conversations').doc(id));
+        const snaps = await db.getAll(...refs);
+        docs = snaps.filter(s => s.exists);
+      } catch (e) {
+        console.error('[GET /api/conversations] getAll error:', e.message);
+      }
     } else {
       // Legacy fallback: query by participants array
-      const snap = await db.collection('conversations')
-        .where('participants', 'array-contains', uid)
-        .limit(50).get();
-      docs = snap.docs;
-      // Back-fill conversationIds on the user doc so future loads are fast
-      if (snap.docs.length > 0) {
-        const ids = snap.docs.map(d => d.id);
-        await db.collection('users').doc(uid).update({
-          conversationIds: admin.firestore.FieldValue.arrayUnion(...ids),
-        }).catch(() => {});
+      try {
+        const snap = await db.collection('conversations')
+          .where('participants', 'array-contains', uid)
+          .limit(50).get();
+        docs = snap.docs;
+        // Back-fill conversationIds on the user doc so future loads are fast
+        if (snap.docs.length > 0) {
+          const ids = snap.docs.map(d => d.id);
+          await db.collection('users').doc(uid).update({
+            conversationIds: admin.firestore.FieldValue.arrayUnion(...ids),
+          }).catch(() => {});
+        }
+      } catch (e) {
+        console.error('[GET /api/conversations] query error:', e.message);
+        // Return empty rather than 500 — index may not exist yet
+        return res.json({ conversations: [] });
       }
     }
 
-    const convs = await Promise.all(docs.map(d => enrichConversation(d, uid)));
+    const convs = (await Promise.allSettled(docs.map(d => enrichConversation(d, uid))))
+      .filter(r => r.status === 'fulfilled')
+      .map(r => r.value);
     convs.sort((a, b) => {
       const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
       const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
@@ -4045,7 +4069,7 @@ app.post('/api/users/:uid/progress-photos', verifyToken, async (req, res) => {
         const file = bucket.file(filename);
         await file.save(buf, { metadata: { contentType: mimeType } });
         await file.makePublic();
-        url = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+        url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filename)}?alt=media`;
       }
     }
     const ref = await db.collection('progressPhotos').add({
@@ -4444,6 +4468,117 @@ app.get('/api/gyms/:id/members', verifyToken, async (req, res) => {
       fitnessLevel: d.data().fitnessLevel || '',
     }));
     res.json(members);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GYM BRANCHES ────────────────────────────────────────────────────────────
+// GET /api/gyms/:id/branches
+app.get('/api/gyms/:id/branches', verifyToken, async (req, res) => {
+  try {
+    const snap = await db.collection('gyms').doc(req.params.id).collection('branches').get();
+    res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/gyms/:id/branches
+app.post('/api/gyms/:id/branches', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('gyms').doc(req.params.id).collection('branches').doc();
+    const branch = { ...req.body, createdAt: new Date().toISOString() };
+    await ref.set(branch);
+    res.json({ id: ref.id, ...branch });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/gyms/:id/branches/:branchId
+app.delete('/api/gyms/:id/branches/:branchId', verifyToken, async (req, res) => {
+  try {
+    await db.collection('gyms').doc(req.params.id).collection('branches').doc(req.params.branchId).delete();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GYM CONTRACTS ───────────────────────────────────────────────────────────
+// GET /api/gyms/:id/contracts
+app.get('/api/gyms/:id/contracts', verifyToken, async (req, res) => {
+  try {
+    const snap = await db.collection('gyms').doc(req.params.id).collection('contracts').get();
+    res.json(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/gyms/:id/contracts
+app.post('/api/gyms/:id/contracts', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('gyms').doc(req.params.id).collection('contracts').doc();
+    const contract = { ...req.body, createdAt: new Date().toISOString() };
+    await ref.set(contract);
+    res.json({ id: ref.id, ...contract });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/gyms/:id/contracts/:contractId
+app.put('/api/gyms/:id/contracts/:contractId', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('gyms').doc(req.params.id).collection('contracts').doc(req.params.contractId);
+    await ref.update({ ...req.body, updatedAt: new Date().toISOString() });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/gyms/:id/contracts/:contractId
+app.delete('/api/gyms/:id/contracts/:contractId', verifyToken, async (req, res) => {
+  try {
+    await db.collection('gyms').doc(req.params.id).collection('contracts').doc(req.params.contractId).delete();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── BUDDY MATCHING ───────────────────────────────────────────────────────────
+// GET /api/users/:uid/buddy-matches — find users with similar fitness profile
+app.get('/api/users/:uid/buddy-matches', verifyToken, async (req, res) => {
+  try {
+    const userSnap = await db.collection('users').doc(req.params.uid).get();
+    if (!userSnap.exists) return res.status(404).json({ error: 'User not found' });
+    const user = userSnap.data();
+    const allSnap = await db.collection('users').limit(200).get();
+    const matches = allSnap.docs
+      .filter(d => d.id !== req.params.uid)
+      .map(d => {
+        const other = d.data();
+        let score = 0;
+        if (user.fitnessLevel && other.fitnessLevel === user.fitnessLevel) score += 3;
+        if (user.gym && other.gym === user.gym) score += 2;
+        if (Array.isArray(user.goals) && Array.isArray(other.goals)) {
+          score += user.goals.filter(g => other.goals.includes(g)).length;
+        }
+        return { id: d.id, displayName: other.displayName, username: other.username, avatar: other.avatar || null, fitnessLevel: other.fitnessLevel, gym: other.gym, score };
+      })
+      .filter(m => m.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+    res.json(matches);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/users/:uid/buddy-action — send/accept/reject buddy request
+app.post('/api/users/:uid/buddy-action', verifyToken, async (req, res) => {
+  try {
+    const { action, targetUid } = req.body; // action: 'request'|'accept'|'reject'|'remove'
+    if (!action || !targetUid) return res.status(400).json({ error: 'action and targetUid required' });
+    const ref = db.collection('buddyRequests').doc(`${req.params.uid}_${targetUid}`);
+    if (action === 'request') {
+      await ref.set({ from: req.params.uid, to: targetUid, status: 'pending', createdAt: new Date().toISOString() });
+    } else if (action === 'accept') {
+      await ref.update({ status: 'accepted', updatedAt: new Date().toISOString() });
+    } else if (action === 'reject') {
+      await ref.update({ status: 'rejected', updatedAt: new Date().toISOString() });
+    } else if (action === 'remove') {
+      await ref.delete();
+    } else {
+      return res.status(400).json({ error: 'Unknown action' });
+    }
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -5233,6 +5368,15 @@ app.get('/api/communities', async (req, res) => {
       return res.json({ communities: DEFAULT_COMMUNITIES.map(c => ({ ...c, memberCount: 0, members: [] })) });
     }
     res.json({ communities: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/communities/:id — single community
+app.get('/api/communities/:id', verifyToken, async (req, res) => {
+  try {
+    const snap = await db.collection('communities').doc(req.params.id).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Community not found' });
+    res.json({ id: snap.id, ...snap.data() });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6724,8 +6868,7 @@ app.delete('/api/gyms/:id/nutrition/:nid', verifyToken, async (req, res) => {
 app.get('/api/admin/health', verifyToken, async (req, res) => {
   try {
     const userSnap = await db.collection('users').get();
-    const now = new Date();
-    const todayStr = now.toDateString();
+    const now = new Date();    const todayStr = now.toDateString();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
     let newToday = 0;
@@ -6749,9 +6892,6 @@ app.post('/api/posts/:id/report', verifyToken, async (req, res) => {
     const postDoc = await postRef.get();
     if (!postDoc.exists) return res.status(404).json({ error: 'Post not found' });
 
-    const existing = await db.collection('reportedPosts').where('postId', '==', req.params.id).get();
-    if (!existing.empty) return res.json({ already: true });
-
     await db.collection('reportedPosts').add({
       postId: req.params.id,
       reportedBy: req.uid,
@@ -6760,146 +6900,8 @@ app.post('/api/posts/:id/report', verifyToken, async (req, res) => {
       createdAt: new Date().toISOString(),
       status: 'pending',
     });
+
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/admin/reported-posts — list all pending reports
-app.get('/api/admin/reported-posts', verifyToken, async (req, res) => {
-  try {
-    const snap = await db.collection('reportedPosts')
-      .where('status', '==', 'pending')
-      .orderBy('createdAt', 'desc')
-      .limit(50)
-      .get();
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    res.json(items);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// DELETE /api/admin/reported-posts/:reportId/dismiss — clear the report flag
-app.delete('/api/admin/reported-posts/:reportId/dismiss', verifyToken, async (req, res) => {
-  try {
-    await db.collection('reportedPosts').doc(req.params.reportId).update({
-      status: 'dismissed',
-      dismissedBy: req.uid,
-      dismissedAt: new Date().toISOString(),
-    });
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// DELETE /api/admin/reported-posts/:reportId/delete-post — delete the post + clear report
-app.delete('/api/admin/reported-posts/:reportId/delete-post', verifyToken, async (req, res) => {
-  try {
-    const reportDoc = await db.collection('reportedPosts').doc(req.params.reportId).get();
-    if (!reportDoc.exists) return res.status(404).json({ error: 'Report not found' });
-    const { postId } = reportDoc.data();
-    if (postId) await db.collection('posts').doc(postId).delete();
-    await db.collection('reportedPosts').doc(req.params.reportId).update({
-      status: 'deleted',
-      deletedBy: req.uid,
-      deletedAt: new Date().toISOString(),
-    });
-    res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ─── XP ENGINE ──────────────────────────────────────────────────────────────
-
-// XP award amounts per event type
-const XP_VALUES = {
-  post_created:         50,
-  post_created_first:  100,  // one-time bonus on very first post
-  pr_logged:            75,
-  comment_left:          5,
-  like_received:        10,
-  comment_received:     15,
-  follower_gained:      20,
-  trending_post:        50,
-  challenge_completed: 150,
-  profile_completed:    80,  // one-time
-  level_5_reached:     500,  // one-time
-  follow_5_users:       50,  // one-time
-  daily_login:          10,
-  daily_task:           50,
-  goal_milestone:      120,
-  streak_7_days:       200,
-  streak_3_week:       100,
-  workout_timer:        30,
-};
-
-// One-time events — deduped by xpEvents subcollection
-const ONE_TIME_EVENTS = new Set([
-  'post_created_first',
-  'profile_completed',
-  'level_5_reached',
-  'follow_5_users',
-]);
-
-// GET /api/users/:uid/xp — fetch total XP + level info
-app.get('/api/users/:uid/xp', verifyToken, async (req, res) => {
-  try {
-    const { uid } = req.params;
-    const userDoc = await db.collection('users').doc(uid).get();
-    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
-    const data = userDoc.data();
-    const totalXP = data.totalXP || 0;
-    const level = Math.floor(totalXP / 1000) + 1;
-    const xpInLevel = totalXP % 1000;
-    const xpToNext = 1000;
-    res.json({ totalXP, level, xpInLevel, xpToNext });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /api/users/:uid/xp/award — award XP for an event
-// Body: { event: string, idempotencyKey?: string }
-// idempotencyKey prevents double-awarding (e.g. "daily_login:2026-05-25")
-app.post('/api/users/:uid/xp/award', verifyToken, async (req, res) => {
-  try {
-    const { uid } = req.params;
-    const { event, idempotencyKey } = req.body || {};
-
-    if (!event || !XP_VALUES[event]) {
-      return res.status(400).json({ error: 'Unknown XP event: ' + event });
-    }
-
-    const amount = XP_VALUES[event];
-    const dedupeKey = idempotencyKey || (ONE_TIME_EVENTS.has(event) ? event : null);
-
-    // Check deduplication if a key is provided
-    if (dedupeKey) {
-      const eventRef = db.collection('users').doc(uid).collection('xpEvents').doc(dedupeKey);
-      const existing = await eventRef.get();
-      if (existing.exists) {
-        // Already awarded — return current XP without modifying
-        const userDoc = await db.collection('users').doc(uid).get();
-        const totalXP = userDoc.data()?.totalXP || 0;
-        const level = Math.floor(totalXP / 1000) + 1;
-        return res.json({ awarded: false, alreadyAwarded: true, totalXP, level, xpInLevel: totalXP % 1000 });
-      }
-      // Record the event to prevent future duplicates
-      await eventRef.set({ event, amount, awardedAt: new Date().toISOString() });
-    }
-
-    // Atomically increment totalXP on the user doc
-    const userRef = db.collection('users').doc(uid);
-    await userRef.set({ totalXP: admin.firestore.FieldValue.increment(amount) }, { merge: true });
-
-    // Also log to xpHistory for audit trail
-    await db.collection('users').doc(uid).collection('xpHistory').add({
-      event,
-      amount,
-      awardedAt: new Date().toISOString(),
-    });
-
-    // Fetch updated totals
-    const updatedDoc = await userRef.get();
-    const totalXP = updatedDoc.data()?.totalXP || 0;
-    const level = Math.floor(totalXP / 1000) + 1;
-    const prevLevel = Math.floor((totalXP - amount) / 1000) + 1;
-    const leveledUp = level > prevLevel;
-
-    res.json({ awarded: true, amount, totalXP, level, xpInLevel: totalXP % 1000, leveledUp, prevLevel });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});

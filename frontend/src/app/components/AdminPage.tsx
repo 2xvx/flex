@@ -408,7 +408,7 @@ export function AdminPage({ currentUser }: { currentUser: User | null }) {
     const action = u.verified ? 'unverify' : 'verify';
     if (!confirm(`${action === 'verify' ? 'Grant' : 'Revoke'} verified badge for ${u.displayName}?`)) return;
     try {
-      const res = await authFetch(`http://192.168.1.102:5000/api/admin/users/${u.uid}/verify`, {
+      const res = await authFetch(`${API}/admin/users/${u.uid}/verify`, {
         method: 'PATCH',
         body: JSON.stringify({ verified: !u.verified, adminId: currentUser?.id }),
       });

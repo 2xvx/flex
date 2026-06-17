@@ -170,7 +170,7 @@ export const deleteAnnouncement = async (id: string) => {
  * followers/following counters to 0. One-shot destructive operation.
  */
 export const resetAllFollows = async () => {
-  const res = await authFetch(`http://192.168.1.102:5000/api/admin/reset-follows`, { method: 'POST' });
+  const res = await authFetch(`${_API_BASE}/admin/reset-follows`, { method: 'POST' });
   if (!res.ok) throw new Error('Failed to reset follows');
   return res.json();
 };

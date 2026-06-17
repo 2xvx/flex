@@ -86,6 +86,7 @@ export function WeeklyRecapPage({ currentUser }: Props) {
     try {
       const res = await authFetch(`${API}/users/${currentUser.id}/weekly-recap`);
       const data = await res.json();
+      if (!res.ok || !data.week) throw new Error(data.error || 'Invalid recap data');
       setRecap(data);
     } catch {
       toast.error('Failed to load recap');
@@ -143,7 +144,7 @@ export function WeeklyRecapPage({ currentUser }: Props) {
           <h1 className="text-white font-bold text-xl">Weekly Recap</h1>
           <p className="text-white/40 text-xs mt-0.5 flex items-center gap-1">
             <Calendar className="w-3 h-3" />
-            {fmt(recap.week.start)} — {fmt(recap.week.end)}
+            {recap.week?.start ? fmt(recap.week.start) : ''} — {recap.week?.end ? fmt(recap.week.end) : ''}
           </p>
         </div>
         <button
@@ -284,7 +285,7 @@ export function WeeklyRecapPage({ currentUser }: Props) {
         {recap.totalWorkouts > 0 && (
           <div className="mt-4 pt-4 border-t border-[rgba(201,169,110,0.08)]">
             <p className="text-white/30 text-xs mb-2">Activity this week</p>
-            <WeekDots workoutDays={recap.workoutDays} weekStart={recap.week.start} />
+            <WeekDots workoutDays={recap.workoutDays} weekStart={recap.week?.start ?? ''} />
           </div>
         )}
 

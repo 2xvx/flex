@@ -355,7 +355,7 @@ function ChallengeDialog({ targetUser, currentUser, onClose }: ChallengeDialogPr
   const handleSend = async () => {
     setSending(true);
     try {
-      await authFetch('http://192.168.1.102:5000/api/challenges', {
+      await authFetch('${API}/challenges', {
         method: 'POST',
         body: JSON.stringify({
           challengerId:   currentUser.id,
@@ -1127,7 +1127,7 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
       if (currentUser?.id === viewingUserId) {
         try {
           const token = localStorage.getItem('fitconnect_id_token');
-          const pr = await fetch(`http://192.168.1.102:5000/api/progress/${viewingUserId}`, {
+          const pr = await fetch(`${API}/progress/${viewingUserId}`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
           });
           if (pr.ok) {
@@ -1155,7 +1155,7 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
   // Load story highlights whenever viewingUserId changes
   useEffect(() => {
     if (!viewingUserId) return;
-    fetch(`http://192.168.1.102:5000/api/users/${viewingUserId}/highlights`, {
+    fetch(`${API}/users/${viewingUserId}/highlights`, {
       headers: authHeaders(),
     })
       .then(r => r.ok ? r.json() : { highlights: [] })
@@ -1214,7 +1214,7 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
     if (!avatarPreview || !currentUser) return;
     setAvatarSaving(true);
     try {
-      const res = await authFetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/profile`, {
+      const res = await authFetch(`${API}/users/${currentUser.id}/profile`, {
         method: 'PATCH',
         body: JSON.stringify({ avatar: avatarPreview }),
       });
@@ -1692,7 +1692,7 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
                         setNewPR({ exercise: '', value: '', unit: 'kg' });
                       }
                       try {
-                        await authFetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/profile`, {
+                        await authFetch(`${API}/users/${currentUser.id}/profile`, {
                           method: 'PATCH',
                           body: JSON.stringify({ pinnedPRs: finalPRs }),
                         });
@@ -1913,7 +1913,7 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
             onClick={() => {
               setActiveTab('saved');
               // Fetch saved posts on demand
-              authFetch(`http://192.168.1.102:5000/api/users/${viewingUserId}/saved-posts`)
+              authFetch(`${API}/users/${viewingUserId}/saved-posts`)
                 .then(r => r.json())
                 .then(d => setSavedPosts(d.posts || []))
                 .catch(() => {});
@@ -2235,7 +2235,7 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
               <button
                 onClick={async () => {
                   const { authFetch: af } = await import('../../utils/authToken');
-                  await af(`http://192.168.1.102:5000/api/users/${currentUser!.id}/highlights/${showHighlightViewer.highlight.id}`, { method: 'DELETE' });
+                  await af(`${API}/users/${currentUser!.id}/highlights/${showHighlightViewer.highlight.id}`, { method: 'DELETE' });
                   setHighlights(prev => prev.filter(h => h.id !== showHighlightViewer.highlight.id));
                   setShowHighlightViewer(null);
                 }}
@@ -2270,7 +2270,7 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
                 if (!newHLName.trim() || !currentUser) return;
                 setCreatingHL(true);
                 try {
-                  const res = await authFetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/highlights`, {
+                  const res = await authFetch(`${API}/users/${currentUser.id}/highlights`, {
                     method: 'POST', body: JSON.stringify({ name: newHLName.trim() }),
                   });
                   const data = await res.json();
@@ -2335,7 +2335,7 @@ function ClientsTab({ trainerId }: { trainerId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    authFetch(`http://192.168.1.102:5000/api/users/${trainerId}/trainer/clients`)
+    authFetch(`${API}/users/${trainerId}/trainer/clients`)
       .then(r => r.json())
       .then(d => setClients(d.clients || []))
       .catch(() => {})
