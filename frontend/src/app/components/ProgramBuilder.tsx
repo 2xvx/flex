@@ -319,9 +319,28 @@ export function ProgramBuilder({ currentUser }: Props) {
   if (viewing) {
     const prog = viewing;
     const isMine = !prog.author || prog.author.username === currentUser?.username;
+    const isActive = activeProgram?.programId === prog.id;
     const week = prog.weeks?.[viewWeek];
+
+    // Progress tracking
+    const totalDays = prog.weeks?.reduce((a, w) => a + w.days.length, 0) ?? 0;
+    const completedDays = isActive
+      ? (activeProgram!.currentWeek * (prog.weeks?.[0]?.days.length || 1)) + activeProgram!.currentDay
+      : 0;
+    const progressPct = totalDays > 0 ? Math.round((completedDays / totalDays) * 100) : 0;
+
+    const isDayDone = (wIdx: number, dIdx: number) => {
+      if (!isActive) return false;
+      if (wIdx < activeProgram!.currentWeek) return true;
+      if (wIdx === activeProgram!.currentWeek && dIdx < activeProgram!.currentDay) return true;
+      return false;
+    };
+    const isDayToday = (wIdx: number, dIdx: number) =>
+      isActive && wIdx === activeProgram!.currentWeek && dIdx === activeProgram!.currentDay;
+
     return (
       <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 space-y-4">
+        {/* Header */}
         <div className="flex items-center gap-3">
           <button onClick={() => setViewing(null)}
             className="w-8 h-8 rounded-xl bg-[rgba(201,169,110,0.04)] hover:bg-[rgba(201,169,110,0.08)] flex items-center justify-center text-white/50 hover:text-white transition-all">
@@ -341,9 +360,11 @@ export function ProgramBuilder({ currentUser }: Props) {
             </button>
           </div>
         </div>
+
+        {/* Program card */}
         <div className="bg-gradient-to-br from-[rgba(201,169,110,0.06)] via-[rgba(201,169,110,0.03)] to-[#080608] border border-[rgba(201,169,110,0.18)] rounded-2xl p-5">
           {prog.description && <p className="text-white/60 text-sm mb-4">{prog.description}</p>}
-          <div className="flex items-center gap-5 flex-wrap">
+          <div className="flex items-center gap-4 flex-wrap mb-4">
             <div className="text-center">
               <div className="text-white font-bold text-xl">{prog.weeks?.length ?? 0}</div>
               <div className="text-white/35 text-xs mt-0.5 flex items-center gap-1"><Calendar className="w-3 h-3" />Weeks</div>
@@ -361,20 +382,43 @@ export function ProgramBuilder({ currentUser }: Props) {
                 {prog.difficulty}
               </div>
             )}
-            {prog.author && !isMine && (
-              <div className="ml-auto flex items-center gap-2">
-                {prog.author.avatar
-                  ? <img src={prog.author.avatar} className="w-7 h-7 rounded-full object-cover" alt="" />
-                  : <div className="w-7 h-7 rounded-full bg-[rgba(201,169,110,0.18)] flex items-center justify-center text-xs text-[#e8c98a]">{prog.author.name?.[0]}</div>
-                }
-                <div>
-                  <div className="text-white/70 text-xs font-medium">{prog.author.name}</div>
-                  <div className="text-white/30 text-[10px]">@{prog.author.username}</div>
-                </div>
-              </div>
+            {prog.goal && (
+              <div className="text-xs px-2.5 py-1 rounded-full border border-emerald-500/20 text-emerald-400 bg-emerald-500/10">{prog.goal}</div>
             )}
           </div>
+          {/* Progress bar — only shown when active */}
+          {isActive && totalDays > 0 && (
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-xs text-white/40">Week {activeProgram!.currentWeek + 1} — Day {activeProgram!.currentDay + 1}</span>
+                <span className="text-xs text-[#c9a96e]">{progressPct}%</span>
+              </div>
+              <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-[#c9a96e] to-[#a07840] rounded-full transition-all" style={{width: `${progressPct}%`}} />
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Start workout button */}
+        {isActive && (
+          <button
+            onClick={advanceDay}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#c9a96e] to-[#a07840] text-white rounded-2xl py-3.5 font-medium text-sm transition-all hover:opacity-90 active:scale-[0.99]">
+            <Play className="w-4 h-4 fill-white" />
+            Start today — {prog.weeks?.[activeProgram!.currentWeek]?.days?.[activeProgram!.currentDay]?.dayName ?? 'Day ' + (activeProgram!.currentDay + 1)}
+          </button>
+        )}
+        {!isActive && isMine && (
+          <button
+            onClick={() => setAsActive(prog)}
+            disabled={settingActive}
+            className="w-full flex items-center justify-center gap-2 border border-[rgba(201,169,110,0.3)] text-[#c9a96e] rounded-2xl py-3 font-medium text-sm transition-all hover:bg-[rgba(201,169,110,0.06)]">
+            <Play className="w-4 h-4" /> Start this program
+          </button>
+        )}
+
+        {/* Week tabs */}
         {(prog.weeks?.length ?? 0) > 0 && (
           <>
             <div className="flex gap-1.5 flex-wrap">
@@ -390,40 +434,77 @@ export function ProgramBuilder({ currentUser }: Props) {
                 </button>
               ))}
             </div>
+
+            {/* Days */}
             {week && (
               <div className="space-y-3">
-                {week.days.map((day, dIdx) => (
-                  <div key={dIdx} className="bg-[#080608] border border-[rgba(201,169,110,0.07)] rounded-2xl overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(201,169,110,0.08)]">
-                      <div className="font-semibold text-white/90 text-sm">{day.dayName}</div>
-                      <div className="text-white/30 text-xs">{day.exercises.filter(e => e.name).length} exercises</div>
-                    </div>
-                    <div className="divide-y divide-white/5">
-                      {day.exercises.filter(ex => ex.name).length === 0 ? (
-                        <div className="px-4 py-3 text-white/25 text-xs italic">Rest day</div>
-                      ) : (
-                        <>
-                          <div className="grid grid-cols-[1fr_48px_64px_52px] gap-2 px-4 py-2 text-[10px] text-white/25 uppercase tracking-wider">
+                {week.days.map((day, dIdx) => {
+                  const done  = isDayDone(viewWeek, dIdx);
+                  const today = isDayToday(viewWeek, dIdx);
+                  const exList = day.exercises.filter(ex => ex.name);
+                  return (
+                    <div key={dIdx} className={'rounded-2xl overflow-hidden border transition-all ' + (
+                      today  ? 'border-[rgba(201,169,110,0.3)] bg-[rgba(201,169,110,0.04)]' :
+                      done   ? 'border-white/5 bg-[rgba(255,255,255,0.01)]' :
+                               'border-[rgba(201,169,110,0.07)] bg-[#080608]'
+                    )}>
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        {/* Status icon */}
+                        {done ? (
+                          <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          </div>
+                        ) : today ? (
+                          <div className="w-7 h-7 rounded-full bg-[rgba(201,169,110,0.15)] border border-[rgba(201,169,110,0.4)] flex items-center justify-center shrink-0">
+                            <Play className="w-3.5 h-3.5 text-[#c9a96e]" />
+                          </div>
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0 text-white/30 text-xs font-medium">
+                            {dIdx + 1}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className={'text-sm font-medium ' + (done ? 'line-through text-white/35' : today ? 'text-white' : 'text-white/70')}>
+                            {day.dayName}
+                          </p>
+                          {exList.length > 0 && (
+                            <p className="text-xs text-white/30 mt-0.5 truncate">
+                              {exList.map(e => e.name).slice(0, 3).join(' · ')}
+                              {exList.length > 3 && ' +' + (exList.length - 3) + ' more'}
+                            </p>
+                          )}
+                        </div>
+                        {done && <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full shrink-0">Done</span>}
+                        {today && <span className="text-[10px] text-[#c9a96e] bg-[rgba(201,169,110,0.1)] px-2.5 py-1 rounded-full shrink-0">Today</span>}
+                      </div>
+
+                      {/* Exercise table — always visible */}
+                      {exList.length > 0 && (
+                        <div className={'border-t divide-y divide-white/5 ' + (today ? 'border-[rgba(201,169,110,0.1)]' : 'border-white/5')}>
+                          <div className="grid grid-cols-[1fr_44px_60px_48px] gap-2 px-4 py-2 text-[10px] text-white/25 uppercase tracking-wider">
                             <span>Exercise</span><span className="text-center">Sets</span><span className="text-center">Reps</span><span className="text-center">Rest</span>
                           </div>
-                          {day.exercises.filter(ex => ex.name).map((ex, eIdx) => (
-                            <div key={eIdx} className="grid grid-cols-[1fr_48px_64px_52px] gap-2 px-4 py-2.5 items-center hover:bg-white/2 transition-colors">
-                              <span className="text-white/85 text-sm font-medium">{ex.name}</span>
-                              <span className="text-white/50 text-xs text-center">{ex.sets}</span>
-                              <span className="text-white/50 text-xs text-center">{ex.reps}</span>
-                              <span className="text-white/50 text-xs text-center">{ex.rest}</span>
+                          {exList.map((ex, eIdx) => (
+                            <div key={eIdx} className="grid grid-cols-[1fr_44px_60px_48px] gap-2 px-4 py-2.5 items-center">
+                              <span className={'text-sm font-medium ' + (done ? 'text-white/30' : 'text-white/85')}>{ex.name}</span>
+                              <span className="text-white/45 text-xs text-center">{ex.sets}</span>
+                              <span className="text-white/45 text-xs text-center">{ex.reps}</span>
+                              <span className="text-white/45 text-xs text-center">{ex.rest}</span>
                             </div>
                           ))}
                           {day.exercises.some(ex => ex.notes) && (
-                            <div className="px-4 py-2.5 text-white/30 text-xs italic">
+                            <div className="px-4 py-2 text-white/30 text-xs italic">
                               {day.exercises.filter(ex => ex.notes).map(ex => ex.notes).join(' · ')}
                             </div>
                           )}
-                        </>
+                        </div>
+                      )}
+                      {exList.length === 0 && (
+                        <div className="px-4 pb-3 text-white/20 text-xs italic">Rest day</div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </>
