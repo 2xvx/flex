@@ -395,9 +395,9 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
             src={post.videoUrl}
             controls
             playsInline
-            crossOrigin="anonymous"
             className="w-full max-h-[480px] object-contain"
             preload="metadata"
+            onError={(e) => console.error('Video load error:', (e.target as HTMLVideoElement).error)}
           />
         </div>
       )}
