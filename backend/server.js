@@ -17,9 +17,9 @@ const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || '';
 
 // ─── Nodemailer / Brevo SMTP ──────────────────────────────────────────────────
 const mailer = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.BREVO_SMTP_USER || '',
     pass: process.env.BREVO_SMTP_KEY  || '',
