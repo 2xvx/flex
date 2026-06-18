@@ -392,7 +392,8 @@ export function Feed({
             <WorkoutCard
               key={post.id}
               post={post}
-              currentUserId={currentUserId}
+              currentUserId={currentUser?.id ?? currentUserId}
+              currentUser={currentUser}
               onLike={handleLike}
               onComment={handleComment}
               onRepost={handleRepost}
