@@ -17,9 +17,9 @@ const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || '';
 
 // ─── Nodemailer / Brevo SMTP ──────────────────────────────────────────────────
 const mailer = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.BREVO_SMTP_USER || '',
     pass: process.env.BREVO_SMTP_KEY  || '',
@@ -284,9 +284,9 @@ app.post('/api/forgot-password', async (req, res) => {
     if (BREVO_USER && BREVO_KEY) {
       const nodemailer = require('nodemailer');
       const transporter = nodemailer.createTransport({
-        host: 'smtp-relay.brevo.com',
-        port: 587,
-        secure: false,
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
         auth: { user: BREVO_USER, pass: BREVO_KEY },
       });
       await transporter.sendMail({
@@ -6986,3 +6986,4 @@ app.post('/api/posts/:id/report', verifyToken, async (req, res) => {
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+       
