@@ -309,7 +309,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-white truncate">{post.user?.name}</p>
           <p className="text-white/40 text-sm">
-            @{post.user?.username} · {formatSmartDate(post.timestamp || post.createdAt || '')}
+            @{post.user?.username?.includes('@') ? post.user.username.split('@')[0] : post.user?.username} · {formatSmartDate(post.timestamp || post.createdAt || '')}
           </p>
         </div>
         {/* Follow button — only shown on other people's posts */}
@@ -395,6 +395,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
             src={post.videoUrl}
             controls
             playsInline
+            crossOrigin="anonymous"
             className="w-full max-h-[480px] object-contain"
             preload="metadata"
           />
