@@ -1,60 +1,42 @@
-// uploadVideo.ts
-// Uploads a video file to Firebase Storage via the backend /api/upload-video
-// endpoint (multipart/form-data). Uses XHR so we can track upload progress.
-// Works for ALL auth types (email/password + Google) since auth is our own ID token.
+// uploadVideo.ts — direct Firebase Storage upload (no backend hop = much faster)
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-import { API } from '../config';
+const FB_CONFIG = {
+  apiKey:        'AIzaSyDYIbJ010CGwWqBLtv4j_TqA6l31HJUrEU',
+  authDomain:    'fitconnect-937d0.firebaseapp.com',
+  projectId:     'fitconnect-937d0',
+  storageBucket: 'fitconnect-937d0.firebasestorage.app',
+};
+
+function getFirebaseApp() {
+  return getApps().length ? getApp() : initializeApp(FB_CONFIG);
+}
 
 export function uploadVideoToStorage(
   file: File,
-  folder: string = 'posts',   // kept for API compat — backend ignores this, uses "videos/<uid>/"
+  folder: string = 'posts',
   onProgress?: (pct: number) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const token = localStorage.getItem('fitconnect_id_token');
-    if (!token) {
-      reject(new Error('Not authenticated — please log in again.'));
-      return;
-    }
+    const storage  = getStorage(getFirebaseApp());
+    const ext      = file.name.split('.').pop() || 'mp4';
+    const filename = `videos/${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const task     = uploadBytesResumable(ref(storage, filename), file, {
+      contentType: file.type || 'video/mp4',
+    });
 
-    const formData = new FormData();
-    formData.append('video', file);
-    // pass folder hint as a query param (backend can use it if needed)
-    formData.append('folder', folder);
-
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API}/upload-video`);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-
-    // Upload progress
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) {
-        onProgress(Math.round((e.loaded / e.total) * 100));
-      }
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText);
-          if (data.url) resolve(data.url);
-          else reject(new Error('No URL returned from server'));
-        } catch {
-          reject(new Error('Invalid server response'));
-        }
-      } else {
-        let msg = `Upload failed (${xhr.status})`;
-        try {
-          const err = JSON.parse(xhr.responseText);
-          if (err.error) msg = err.error;
-        } catch { /* ignore */ }
-        reject(new Error(msg));
-      }
-    };
-
-    xhr.onerror = () => reject(new Error('Network error during upload'));
-    xhr.ontimeout = () => reject(new Error('Upload timed out'));
-
-    xhr.send(formData);
+    task.on(
+      'state_changed',
+      (snap) => {
+        if (onProgress && snap.totalBytes > 0)
+          onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+      },
+      (err) => reject(new Error(err.message || 'Upload failed')),
+      async () => {
+        try { resolve(await getDownloadURL(task.snapshot.ref)); }
+        catch (e: any) { reject(new Error(e.message || 'Could not get download URL')); }
+      },
+    );
   });
 }
