@@ -128,13 +128,19 @@ function ForgotModal({ onClose }: { onClose: () => void }) {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    const raw = email.trim();
+    if (!raw) return;
+    // Basic email format check
+    if (!raw.includes('@') || !raw.includes('.')) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
     setSending(true);
     try {
       const res  = await fetch(`${API}/forgot-password`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ email: email.trim() }),
+        body:    JSON.stringify({ email: raw }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send reset email");

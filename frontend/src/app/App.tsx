@@ -207,7 +207,7 @@ export default function App() {
         <OTPVerifyScreen
           email={pendingOTP.maskedEmail}
           onVerified={handleOTPVerified}
-          onSkip={handleOTPVerified}
+          // onSkip removed — email verification is mandatory
         />
       </>
     );
