@@ -1,3 +1,4 @@
+import { API } from '../../config';
 // Feed.tsx
 // Center column — the paginated list of workout posts.
 //
@@ -62,7 +63,7 @@ export function Feed({
   // Load following list for the "Following" filter
   useEffect(() => {
     if (!currentUserId) return;
-    fetch(`http://192.168.1.102:5000/api/users/${currentUserId}/following`)
+    fetch(`${API}/users/${currentUserId}/following`)
       .then(r => r.json())
       .then(d => {
         const ids = (d.following || []).map((u: any) => u.id || u.uid || u);
@@ -195,7 +196,7 @@ export function Feed({
       toast.loading('Creating post...', { id: 'create-post' });
       await createPostAPI({ ...newPost, user: currentUser });
       // Update streak server-side so RightSidebar shows accurate count
-      fetch(`http://192.168.1.102:5000/api/users/${currentUser.id}/update-streak`, {
+      fetch(`${API}/users/${currentUser.id}/update-streak`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('fitconnect_id_token')}` },
       }).catch(() => {});

@@ -1,3 +1,4 @@
+import { API } from '../../config';
 // LeaderboardPage.tsx — Multi-category rankings + Hall of Fame
 
 import { useState, useEffect, useCallback } from 'react';
@@ -89,7 +90,7 @@ export function LeaderboardPage({ currentUser, onViewProfile }: LeaderboardPageP
   useEffect(() => {
     if (!currentUser?.id) return;
     import('../../utils/authToken').then(({ authFetch }) => {
-      authFetch(`${(window as any).__API__ || 'http://localhost:5000/api'}/users/${currentUser.id}/following`)
+      authFetch(`${API}/users/${currentUser.id}/following`)
         .then(r => r.json())
         .then((data: string[]) => setFollowing(new Set(data)))
         .catch(() => {});

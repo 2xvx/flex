@@ -3,6 +3,7 @@
 // Opened when a notification links to a specific post, or when a user
 // taps "View post" from the feed. Supports deep-linking via /post/:id.
 
+import { API } from '../../config';
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { WorkoutPost, User } from '../types';
@@ -25,7 +26,7 @@ export function PostDetailPage({ postId, currentUser, onBack }: PostDetailPagePr
   const loadPost = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://192.168.1.102:5000/api/posts/${postId}`);
+      const res = await fetch(`${API}/posts/${postId}`);
       if (res.status === 404) { setNotFound(true); return; }
       if (!res.ok) throw new Error('Failed to load post');
       const data = await res.json();

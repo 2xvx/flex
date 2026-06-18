@@ -1,3 +1,4 @@
+import { API } from '../../config';
 // RightSidebar.tsx — Option C redesign
 // Widgets:
 //   1. Goals — SVG arc progress rings for "Post 10 workouts" + "7-day streak"
@@ -106,7 +107,7 @@ export function RightSidebar({ posts, currentUser }: RightSidebarProps) {
   useEffect(() => {
     if (!currentUser?.id) return;
     const token = localStorage.getItem('fitconnect_id_token');
-    const apiHost = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+    const apiHost = API;
     fetch(`${apiHost}/api/users/${currentUser.id}/update-streak`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -118,7 +119,7 @@ export function RightSidebar({ posts, currentUser }: RightSidebarProps) {
 
   // Fetch active challenge set by admin
   useEffect(() => {
-    const apiHost = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000';
+    const apiHost = API;
     fetch(`${apiHost}/api/challenges/active`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.challenge) setActiveChallenge(d.challenge); })
