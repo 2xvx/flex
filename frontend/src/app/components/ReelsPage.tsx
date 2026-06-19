@@ -475,7 +475,7 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: ReelsPagePr
                   style={{ aspectRatio: '9/16' }}
                 >
                   {r.videoUrl ? (
-                    <video src={r.videoUrl} className="absolute inset-0 w-full h-full object-cover" muted preload="metadata" crossOrigin="anonymous" />
+                    <video src={r.videoUrl} className="absolute inset-0 w-full h-full object-cover" muted preload="metadata" />
                   ) : r.image ? (
                     <img src={r.image} alt="clip" className="absolute inset-0 w-full h-full object-cover" />
                   ) : (
@@ -537,7 +537,6 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: ReelsPagePr
                 webkit-playsinline="true"
                 x-webkit-airplay="allow"
                 preload="auto"
-                crossOrigin="anonymous"
                 muted={false}
                 onClick={togglePlay}
                 onError={() => setVideoPaused(true)}
