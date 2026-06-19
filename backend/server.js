@@ -266,51 +266,29 @@ app.post('/api/signup', async (req, res) => {
 
 // ─── FORGOT PASSWORD ──────────────────────────────────────────────────────────
 // Public endpoint — no auth required.
-// Uses Firebase Auth REST API to send a password-reset email.
+// Uses Firebase Auth REST API directly — no SMTP needed, Firebase sends the email.
 app.post('/api/forgot-password', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
   try {
-    // Verify user exists first
-    await admin.auth().getUserByEmail(email);
-
-    // Generate a password reset link using Admin SDK (no web API key needed)
-    const resetLink = await admin.auth().generatePasswordResetLink(email);
-
-    // Send via Brevo SMTP if credentials are set; otherwise fall back to Firebase REST API
-    const BREVO_USER = process.env.BREVO_SMTP_USER;
-    const BREVO_KEY  = process.env.BREVO_SMTP_KEY;
-
-    if (BREVO_USER && BREVO_KEY) {
-      const nodemailer = require('nodemailer');
-      const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
-        auth: { user: BREVO_USER, pass: BREVO_KEY },
-      });
-      await transporter.sendMail({
-        from: `"${process.env.BREVO_FROM_NAME || 'Flex'}" <${process.env.BREVO_FROM_EMAIL || BREVO_USER}>`,
-        to: email,
-        subject: 'Reset your Flex password',
-        html: `
-          <div style="font-family:sans-serif;max-width:480px;margin:auto;background:#080608;color:#f0ebe3;padding:32px;border-radius:12px">
-            <h2 style="color:#c9a96e;margin-bottom:8px">Reset your password</h2>
-            <p style="color:rgba(240,235,227,0.6);margin-bottom:24px">Click the button below to set a new password. This link expires in 1 hour.</p>
-            <a href="${resetLink}" style="display:inline-block;background:linear-gradient(135deg,#c9a96e,#a07840);color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Reset Password</a>
-            <p style="color:rgba(240,235,227,0.3);font-size:11px;margin-top:24px">If you didn't request this, you can safely ignore this email.</p>
-          </div>
-        `,
-      });
-    } else if (FIREBASE_WEB_API_KEY && FIREBASE_WEB_API_KEY !== 'your_firebase_web_api_key_here') {
-      // Fall back to Firebase REST API
-      const fbRes = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_WEB_API_KEY}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }) }
-      );
-      if (!fbRes.ok) { const err = await fbRes.json(); throw new Error(err?.error?.message || 'Firebase error'); }
-    } else {
-      throw new Error('Email service not configured');
+    // Use Firebase REST API to send password reset email directly.
+    // Firebase handles the email delivery — no SMTP required.
+    if (!FIREBASE_WEB_API_KEY) throw new Error('FIREBASE_WEB_API_KEY not set');
+    const fbRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_WEB_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
+      }
+    );
+    const fbData = await fbRes.json();
+    if (!fbRes.ok) {
+      const msg = fbData?.error?.message || 'Firebase error';
+      if (msg.includes('EMAIL_NOT_FOUND') || msg.includes('USER_NOT_FOUND')) {
+        return res.status(404).json({ error: 'No account found with this email address.' });
+      }
+      throw new Error(msg);
     }
 
     res.json({ message: 'Password reset email sent' });
