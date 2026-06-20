@@ -237,7 +237,7 @@ export function Stories({ currentUser }: Props) {
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40 pointer-events-none" />
 
           {/* Progress bars */}
-          <div className="absolute top-0 left-0 right-0 flex gap-1 p-3">
+          <div className="absolute top-0 left-0 right-0 flex gap-1 p-3 z-20">
             {groups[viewing.groupIdx].stories.map((_, i) => (
               <div key={i} className="flex-1 h-0.5 bg-white/25 rounded-full overflow-hidden">
                 <div
@@ -249,7 +249,7 @@ export function Stories({ currentUser }: Props) {
           </div>
 
           {/* User info */}
-          <div className="absolute top-8 left-0 right-0 flex items-center gap-2.5 px-4 pt-2">
+          <div className="absolute top-8 left-0 right-0 flex items-center gap-2.5 px-4 pt-2 z-20">
             <div className="w-8 h-8 rounded-full overflow-hidden border border-white/30 shrink-0">
               {currentStory.user.avatar
                 ? <img src={currentStory.user.avatar} alt="" className="w-full h-full object-cover" />
@@ -283,8 +283,8 @@ export function Stories({ currentUser }: Props) {
           )}
 
           {/* Nav zones */}
-          <button onClick={prevStory} className="absolute left-0 top-0 bottom-0 w-1/3" />
-          <button onClick={advanceStory} className="absolute right-0 top-0 bottom-0 w-1/3" />
+          <button onClick={prevStory} className="absolute left-0 top-0 bottom-0 w-1/3 z-10" />
+          <button onClick={advanceStory} className="absolute right-0 top-0 bottom-0 w-1/3 z-10" />
 
           {/* Visible nav arrows on desktop */}
           <button onClick={prevStory} className="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/40 rounded-full items-center justify-center text-white hover:bg-black/60">

@@ -57,8 +57,9 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
   const [followLoading, setFollowLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Bookmark state
+  // Bookmark + repost state
   const [isSaved, setIsSaved] = useState(false);
+  const [isReposted, setIsReposted] = useState(!!post.isReposted);
 
   // Reaction state
   const [userReaction, setUserReaction] = useState<ReactionType | null>((post.userReaction as ReactionType) || null);
@@ -631,8 +632,8 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
 
         <Button
           variant="ghost" size="sm"
-          className="gap-1.5 text-white/40 hover:text-green-400 hover:bg-green-500/10 transition-all duration-200"
-          onClick={() => onRepost?.(post.id)}
+          className={`gap-1.5 transition-all duration-200 ${isReposted ? 'text-green-400 bg-green-500/10' : 'text-white/40 hover:text-green-400 hover:bg-green-500/10'}`}
+          onClick={() => { onRepost?.(post.id); setIsReposted(true); }}
         >
           <Repeat2 className="w-4 h-4" />
         </Button>

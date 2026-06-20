@@ -19,6 +19,10 @@ interface Gym {
   lng?: number;
   memberCount?: number;
   photo?: string;
+  amenities?: string[];
+  rating?: number;
+  ratingCount?: number;
+  hours?: Record<string, string>;
   createdAt?: string;
 }
 
@@ -136,11 +140,19 @@ export function GymsPage({ currentUser, onNavigate }: Props) {
         </div>
 
         {/* Hero */}
-        <div className="bg-gradient-to-br from-blue-500/15 via-cyan-500/10 to-[#080608] border border-blue-500/20 rounded-2xl p-5">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-3xl shrink-0">
-              {emoji}
+        <div className="bg-gradient-to-br from-blue-500/15 via-cyan-500/10 to-[#080608] border border-blue-500/20 rounded-2xl overflow-hidden">
+          {selected.photo && (
+            <div className="w-full h-48 overflow-hidden">
+              <img src={selected.photo} alt={selected.name} className="w-full h-full object-cover" />
             </div>
+          )}
+          <div className="p-5">
+          <div className="flex items-start gap-4">
+            {!selected.photo && (
+              <div className="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-3xl shrink-0">
+                {emoji}
+              </div>
+            )}
             <div className="flex-1">
               <h3 className="text-white font-bold text-xl">{selected.name}</h3>
               <div className="flex items-center gap-1.5 mt-1 text-white/50 text-sm">
@@ -149,7 +161,20 @@ export function GymsPage({ currentUser, onNavigate }: Props) {
                 <span>{selected.city}</span>
                 {selected.country && <span>, {selected.country}</span>}
               </div>
-              {selected.description && <p className="text-white/40 text-sm mt-2">{selected.description}</p>}
+              {selected.rating && (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="text-yellow-400 text-sm">{'★'.repeat(Math.round(selected.rating))}</span>
+                  <span className="text-white/50 text-xs">{selected.rating} · {selected.ratingCount || 0} reviews · {selected.memberCount || 0} members</span>
+                </div>
+              )}
+              {selected.description && <p className="text-white/50 text-sm mt-2 leading-relaxed">{selected.description}</p>}
+              {selected.amenities && selected.amenities.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {selected.amenities.map(a => (
+                    <span key={a} className="text-xs px-2 py-0.5 rounded-full bg-[rgba(201,169,110,0.08)] border border-[rgba(201,169,110,0.18)] text-[#e8c98a]">{a}</span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           {/* Check-in button */}
@@ -164,6 +189,7 @@ export function GymsPage({ currentUser, onNavigate }: Props) {
           >
             {isMyGym ? <><CheckCircle2 className="w-4 h-4" /> My Gym — Click to leave</> : <><MapPin className="w-4 h-4" /> Set as my gym</>}
           </button>
+          </div>
         </div>
 
         {/* Map embed */}
@@ -176,6 +202,23 @@ export function GymsPage({ currentUser, onNavigate }: Props) {
             referrerPolicy="no-referrer-when-downgrade"
           />
         </div>
+
+        {/* Hours */}
+        {selected.hours && Object.keys(selected.hours).length > 0 && (
+          <div className="bg-[#080608] border border-[rgba(201,169,110,0.07)] rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-[rgba(201,169,110,0.08)]">
+              <p className="text-white/70 text-sm font-semibold">Opening Hours</p>
+            </div>
+            <div className="divide-y divide-white/[0.04]">
+              {Object.entries(selected.hours).map(([day, hours]) => (
+                <div key={day} className="flex items-center justify-between px-4 py-2.5">
+                  <span className="text-white/50 text-sm capitalize">{day}</span>
+                  <span className={`text-sm font-medium ${hours === 'Closed' ? 'text-red-400/70' : 'text-[#e8c98a]'}`}>{hours}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Members */}
         <div className="bg-[#080608] border border-[rgba(201,169,110,0.07)] rounded-2xl overflow-hidden">
@@ -280,30 +323,51 @@ export function GymsPage({ currentUser, onNavigate }: Props) {
             const emoji = GYM_EMOJIS[(gym.name || 'G').charCodeAt(0) % GYM_EMOJIS.length];
             return (
               <div key={gym.id} onClick={() => openGym(gym)}
-                className="bg-[#080608] border border-[rgba(201,169,110,0.07)] rounded-2xl p-4 hover:border-[rgba(201,169,110,0.18)] hover:bg-[#0d0b08] transition-all cursor-pointer group">
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-2xl shrink-0">
-                    {emoji}
+                className="bg-[#080608] border border-[rgba(201,169,110,0.07)] rounded-2xl overflow-hidden hover:border-[rgba(201,169,110,0.25)] hover:bg-[#0d0b08] transition-all cursor-pointer group">
+                {/* Photo banner */}
+                {gym.photo && (
+                  <div className="w-full h-36 overflow-hidden">
+                    <img src={gym.photo} alt={gym.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="text-white font-semibold text-sm truncate">{gym.name}</h3>
-                      {isMyGym && (
-                        <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0">
-                          <CheckCircle2 className="w-2.5 h-2.5" /> My Gym
-                        </span>
+                )}
+                <div className="p-4">
+                  <div className="flex items-start gap-3">
+                    {!gym.photo && (
+                      <div className="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-2xl shrink-0">
+                        {emoji}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h3 className="text-white font-semibold text-sm truncate">{gym.name}</h3>
+                        {isMyGym && (
+                          <span className="text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> My Gym
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 text-white/40 text-xs mb-1">
+                        <MapPin className="w-3 h-3" />
+                        {gym.address && <span>{gym.address}, </span>}
+                        <span>{gym.city}</span>
+                        {gym.country && <span>, {gym.country}</span>}
+                      </div>
+                      {gym.rating && (
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-yellow-400 text-xs">{'★'.repeat(Math.round(gym.rating))}</span>
+                          <span className="text-white/40 text-xs">{gym.rating} ({gym.ratingCount || 0} reviews)</span>
+                        </div>
+                      )}
+                      {gym.description && <p className="text-white/35 text-xs line-clamp-2 mt-1">{gym.description}</p>}
+                      {gym.amenities && gym.amenities.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {gym.amenities.slice(0, 4).map(a => (
+                            <span key={a} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[rgba(201,169,110,0.06)] border border-[rgba(201,169,110,0.12)] text-white/40">{a}</span>
+                          ))}
+                          {gym.amenities.length > 4 && <span className="text-[10px] text-white/25">+{gym.amenities.length - 4} more</span>}
+                        </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 text-white/40 text-xs mb-1">
-                      <MapPin className="w-3 h-3" />
-                      {gym.address && <span>{gym.address}, </span>}
-                      <span>{gym.city}</span>
-                      {gym.country && <span>, {gym.country}</span>}
-                    </div>
-                    {gym.description && <p className="text-white/30 text-xs line-clamp-1">{gym.description}</p>}
-                  </div>
-                  <div className="text-white/20 group-hover:text-white/50 transition-colors shrink-0">
-                    <MapPin className="w-4 h-4" />
                   </div>
                 </div>
               </div>

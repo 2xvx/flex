@@ -162,6 +162,7 @@ export interface WorkoutPost {
   userId?: string;
   authorId?: string;
   type?: string;
+  isReposted?: boolean;
 }
 
 export interface Comment {

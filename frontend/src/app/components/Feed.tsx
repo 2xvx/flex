@@ -38,13 +38,15 @@ interface FeedProps {
 }
 
 export function Feed({
-  currentUserId,
+  currentUserId: currentUserIdProp,
   currentUser,
   onPostsLoaded,
   isCreateDialogOpen = false,
   onCreateDialogChange,
   onViewPost,
 }: FeedProps) {
+  // Derive the effective user ID — App.tsx only passes currentUser, not currentUserId
+  const currentUserId = currentUserIdProp ?? currentUser?.id;
   const [livePosts,         setLivePosts]         = useState<WorkoutPost[]>([]);
   const [loading,           setLoading]           = useState(true);
   const [loadingMore,       setLoadingMore]       = useState(false);

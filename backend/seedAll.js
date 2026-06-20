@@ -302,7 +302,7 @@ async function seedAll() {
       type: 'workout', workoutType: 'CrossFit',
       duration: 0, calories: 0, exercises: [],
       caption: '🔥 WOD highlight — 100 wall balls for time. 6:42. New PR!! The lungs wanted to quit, the mind said no. #CrossFit #WOD #Reels',
-      videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
       image: 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=800&h=600&fit=crop',
       likes: 344, likedBy: [uid('alexcarter'), uid('sofiamendez'), uid('jamesokafor'), ownerUid],
       comments: [
@@ -318,7 +318,7 @@ async function seedAll() {
       type: 'workout', workoutType: 'Strength',
       duration: 0, calories: 0, exercises: [],
       caption: '220kg deadlift form check 📹 Finally hitting depth consistently. 3 years in the making. Drop a 💪 if you want the program!',
-      videoUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
       image: 'https://images.unsplash.com/photo-1517963879433-6ad2b056d712?w=800&h=600&fit=crop',
       likes: 521, likedBy: [uid('sofiamendez'), uid('jamesokafor'), uid('lunapark'), uid('priyasharma'), uid('marcusbell'), ownerUid],
       comments: [
