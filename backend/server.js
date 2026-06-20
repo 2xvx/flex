@@ -4698,13 +4698,13 @@ app.get('/api/meals/saved', verifyToken, async (req, res) => {
     const savedSnap = await db.collection('mealSaves')
       .where('uid', '==', req.uid).get();
     const mealIds = savedSnap.docs.map(d => d.data().mealId);
-    if (mealIds.length === 0) return res.json([]);
+    if (mealIds.length === 0) return res.json({ meals: [] });
     const meals = [];
     for (const mid of mealIds) {
       const snap = await db.collection('meals').doc(mid).get();
       if (snap.exists) meals.push({ id: snap.id, ...snap.data(), saved: true });
     }
-    res.json(meals);
+    res.json({ meals });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -5190,6 +5190,18 @@ app.post('/api/users/:uid/view', async (req, res) => {
 app.post('/api/users/:uid/nutrition', verifyToken, verifyOwner, async (req, res) => {
   const { date, meals } = req.body;
   if (!date) return res.status(400).json({ error: 'date required' });
+  try {
+    await db.collection('users').doc(req.params.uid).collection('nutrition').doc(date)
+      .set({ date, meals: meals || [], updatedAt: new Date().toISOString() }, { merge: true });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/users/:uid/nutrition/:date — same as above but date comes from URL param
+// Used by MealsPage "Add to Today's Log" feature
+app.post('/api/users/:uid/nutrition/:date', verifyToken, verifyOwner, async (req, res) => {
+  const { date } = req.params;
+  const { meals } = req.body;
   try {
     await db.collection('users').doc(req.params.uid).collection('nutrition').doc(date)
       .set({ date, meals: meals || [], updatedAt: new Date().toISOString() }, { merge: true });

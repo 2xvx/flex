@@ -107,7 +107,8 @@ export function MealsPage({ currentUser }: MealsPageProps) {
       const res = await authFetch(endpoint);
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
-      setMeals(data);
+      // /meals returns array; /meals/saved returns {meals:[]}
+      setMeals(Array.isArray(data) ? data : (data.meals || []));
     } catch {
       toast.error('Could not load meals');
     } finally {

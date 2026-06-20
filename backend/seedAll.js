@@ -84,6 +84,24 @@ const minsAgo   = (n) => new Date(Date.now() - n * 60000).toISOString();
 async function seedAll() {
   console.log('\n🌱 FLEX FULL SEED STARTING...\n');
 
+  // ── 0. Clean up collections that get duplicated on re-seed ───────────────
+  console.log('🧹 Cleaning up old seed data...');
+  const CLEAN = ['meals','gyms','communities','stories'];
+  for (const col of CLEAN) {
+    const snap = await db.collection(col).get();
+    const batch = db.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    if (!snap.empty) await batch.commit();
+    console.log(`   Cleared ${snap.size} docs from '${col}'`);
+  }
+  // Clean posts (keep user-created ones, delete seeded workout posts by demo users)
+  const postsSnap = await db.collection('posts').get();
+  const postBatch = db.batch();
+  postsSnap.docs.forEach(d => postBatch.delete(d.ref));
+  if (!postsSnap.empty) await postBatch.commit();
+  console.log(`   Cleared ${postsSnap.size} docs from 'posts'`);
+  console.log('✅ Cleanup done\n');
+
   // ── 1. Resolve owner UID ──────────────────────────────────────────────────
   let ownerUid;
   try {
