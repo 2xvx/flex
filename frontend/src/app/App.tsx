@@ -63,6 +63,7 @@ function viewFromPath(path: string): string {
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated]         = useState(false);
+  const [authLoading, setAuthLoading]                 = useState(true);
   const [currentView, setCurrentView]                 = useState<string>(() => viewFromPath(window.location.pathname));
   const [currentUser, setCurrentUser]                 = useState<User | null>(null);
   const [allPosts, setAllPosts]                       = useState<WorkoutPost[]>([]);
@@ -87,6 +88,7 @@ export default function App() {
       if (user) {
         setCurrentUser(user);
         setIsAuthenticated(true);
+        setAuthLoading(false);
         try {
           const result = await dailyLoginXP(user.id);
           if (result?.leveledUp) {
@@ -97,6 +99,7 @@ export default function App() {
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        setAuthLoading(false);
       }
     });
     return () => unsub?.();
@@ -198,6 +201,9 @@ export default function App() {
   // Derived
   const hideRightSidebar = NO_RIGHT_SIDEBAR.includes(currentView);
   const isFullHeight     = FULL_HEIGHT_VIEWS.includes(currentView);
+
+  // ── Auth loading — wait for localStorage check before showing anything ────────
+  if (authLoading) return null;
 
   // ── OTP Verification (after signup, before entering app) ─────────────────────
   if (pendingOTP) {
