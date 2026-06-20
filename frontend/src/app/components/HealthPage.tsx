@@ -38,7 +38,7 @@ export function HealthPage({ currentUser }: Props) {
         </div>
       </div>
       {tab === 'nutrition' && <NutritionPage currentUser={currentUser} />}
-      {tab === 'meals'     && <MealsPage     currentUser={currentUser} />}
+      {tab === 'meals'     && <MealsPage     currentUser={currentUser} onGoToLog={() => setTab('nutrition')} />}
       {tab === 'habits'    && currentUser && <HabitTrackerPage userId={currentUser.id} />}
       {tab === 'water'     && <WaterTrackerPage currentUser={currentUser} />}
       {tab === 'recovery'  && <RecoveryScorePage currentUser={currentUser} />}

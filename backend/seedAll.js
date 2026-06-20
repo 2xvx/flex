@@ -86,7 +86,7 @@ async function seedAll() {
 
   // ── 0. Clean up collections that get duplicated on re-seed ───────────────
   console.log('🧹 Cleaning up old seed data...');
-  const CLEAN = ['meals','gyms','communities','stories'];
+  const CLEAN = ['meals','gyms','communities','stories','programs'];
   for (const col of CLEAN) {
     const snap = await db.collection(col).get();
     const batch = db.batch();
@@ -320,7 +320,7 @@ async function seedAll() {
       type: 'workout', workoutType: 'CrossFit',
       duration: 0, calories: 0, exercises: [],
       caption: '🔥 WOD highlight — 100 wall balls for time. 6:42. New PR!! The lungs wanted to quit, the mind said no. #CrossFit #WOD #Reels',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      videoUrl: 'http://localhost:5000/videos/workout1.mp4',
       image: 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=800&h=600&fit=crop',
       likes: 344, likedBy: [uid('alexcarter'), uid('sofiamendez'), uid('jamesokafor'), ownerUid],
       comments: [
@@ -336,7 +336,7 @@ async function seedAll() {
       type: 'workout', workoutType: 'Strength',
       duration: 0, calories: 0, exercises: [],
       caption: '220kg deadlift form check 📹 Finally hitting depth consistently. 3 years in the making. Drop a 💪 if you want the program!',
-      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+      videoUrl: 'http://localhost:5000/videos/workout2.mp4',
       image: 'https://images.unsplash.com/photo-1517963879433-6ad2b056d712?w=800&h=600&fit=crop',
       likes: 521, likedBy: [uid('sofiamendez'), uid('jamesokafor'), uid('lunapark'), uid('priyasharma'), uid('marcusbell'), ownerUid],
       comments: [
@@ -471,62 +471,117 @@ async function seedAll() {
   }
   console.log(`✅ Personal Records (${prs.length})`);
 
-  // ── 8. Healthy Meals (posted by Sofia = trainer) ──────────────────────────
+  // ── 8. Healthy Meals (trainer curated) ──────────────────────────────────
   const meals = [
     {
-      name: 'High Protein Chicken Bowl',
-      description: 'My go-to post-workout meal. Simple, fast, and hits 50g protein easily.',
+      name: 'High Protein Chicken Rice Bowl',
+      description: 'My go-to post-workout meal. Simple, fast, hits 52g protein. I eat this every single training day.',
       category: 'lunch',
       calories: 620, protein: 52, carbs: 58, fat: 14,
-      ingredients: ['200g chicken breast', '150g brown rice', '1 cup broccoli', '1 tbsp olive oil', 'Salt, pepper, garlic powder'],
-      instructions: 'Cook rice. Season and grill chicken 6 min each side. Steam broccoli. Assemble and drizzle oil.',
-      photo: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&h=600&fit=crop',
+      ingredients: ['200g chicken breast', '150g brown rice', '1 cup broccoli', '1 tbsp olive oil', 'Salt, pepper, garlic powder', 'Sriracha to taste'],
+      instructions: 'Cook rice. Season chicken with salt, pepper, garlic. Grill 6 min per side. Steam broccoli 4 min. Bowl it, drizzle oil and sriracha.',
+      photo: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&h=600&fit=crop',
       authorId: uid('sofiamendez'), authorName: 'Sofia Mendez', authorAvatar: DEMO_USERS[1].avatar,
-      saves: 124, createdAt: hoursAgo(48),
+      saves: 247, createdAt: hoursAgo(24),
     },
     {
       name: 'Pre-Workout Oatmeal Power Bowl',
-      description: 'Eat this 90 mins before training. Slow carbs + protein = sustained energy.',
+      description: 'Eat this 90 mins before training. Slow carbs + protein = sustained energy. No crash, no fade.',
       category: 'breakfast',
       calories: 480, protein: 28, carbs: 72, fat: 10,
-      ingredients: ['100g rolled oats', '1 scoop vanilla protein', '1 banana', '1 tbsp almond butter', '200ml almond milk', 'Blueberries'],
-      instructions: 'Cook oats with almond milk. Stir in protein powder off heat. Top with banana, almond butter, and blueberries.',
+      ingredients: ['100g rolled oats', '1 scoop vanilla protein powder', '1 banana', '1 tbsp almond butter', '200ml almond milk', 'Blueberries', 'Cinnamon'],
+      instructions: 'Cook oats with almond milk on medium 5 min. Off heat, stir in protein. Top with banana slices, almond butter, blueberries and cinnamon.',
       photo: 'https://images.unsplash.com/photo-1484723091739-30990806eb62?w=800&h=600&fit=crop',
       authorId: uid('sofiamendez'), authorName: 'Sofia Mendez', authorAvatar: DEMO_USERS[1].avatar,
-      saves: 98, createdAt: hoursAgo(72),
+      saves: 189, createdAt: hoursAgo(48),
     },
     {
       name: 'Vegan Protein Buddha Bowl',
-      description: 'Proof you can hit 42g protein with zero meat. My most requested recipe.',
+      description: 'Proof you can hit 42g protein with zero meat. Vegans and meat-eaters both ask me for this recipe.',
       category: 'dinner',
       calories: 520, protein: 42, carbs: 55, fat: 18,
-      ingredients: ['150g quinoa', '1 can chickpeas (roasted)', '200g firm tofu', '2 tbsp tahini', 'Lemon juice', 'Mixed greens'],
-      instructions: 'Cook quinoa. Roast chickpeas at 200°C for 25min. Pan-fry tofu. Mix tahini + lemon for dressing. Assemble.',
-      photo: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&h=600&fit=crop',
+      ingredients: ['150g quinoa', '1 can chickpeas', '200g firm tofu', '2 tbsp tahini', '1 lemon (juiced)', '2 cups mixed greens', 'Cherry tomatoes', 'Cucumber'],
+      instructions: 'Cook quinoa 15 min. Roast chickpeas 200C 25 min until crispy. Pan-fry cubed tofu 8 min. Whisk tahini + lemon + 2 tbsp water for dressing. Assemble.',
+      photo: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&h=600&fit=crop',
       authorId: uid('priyasharma'), authorName: 'Priya Sharma', authorAvatar: DEMO_USERS[3].avatar,
-      saves: 71, createdAt: hoursAgo(96),
+      saves: 134, createdAt: hoursAgo(72),
     },
     {
-      name: 'Overnight Protein Oats',
-      description: 'Zero morning prep. Make it the night before and it\'s ready when you wake up.',
+      name: 'Overnight Chocolate Protein Oats',
+      description: 'Tastes like dessert, hits like a meal. Zero morning prep — make it before bed. 34g protein in a jar.',
       category: 'breakfast',
       calories: 410, protein: 34, carbs: 48, fat: 8,
-      ingredients: ['80g oats', '1 scoop chocolate protein', '200ml Greek yogurt', '1 tbsp chia seeds', '100ml milk'],
-      instructions: 'Mix everything in a jar. Seal and refrigerate overnight. Top with berries in the morning.',
+      ingredients: ['80g rolled oats', '1 scoop chocolate whey protein', '150g Greek yogurt', '1 tbsp chia seeds', '150ml oat milk', 'Dark chocolate chips', 'Strawberries'],
+      instructions: 'Mix oats, protein, yogurt, chia, milk in jar. Stir well. Top with chocolate chips. Seal and refrigerate overnight. Add fresh strawberries in the morning.',
       photo: 'https://images.unsplash.com/photo-1571748982800-fa51082c2224?w=800&h=600&fit=crop',
       authorId: uid('sofiamendez'), authorName: 'Sofia Mendez', authorAvatar: DEMO_USERS[1].avatar,
-      saves: 156, createdAt: hoursAgo(120),
+      saves: 312, createdAt: hoursAgo(96),
     },
     {
-      name: 'Salmon & Sweet Potato Recovery Meal',
-      description: 'Best post-leg-day meal. Omega-3 reduces inflammation, sweet potato refills glycogen.',
+      name: 'Baked Salmon & Sweet Potato',
+      description: 'Best post-leg-day meal. Omega-3s crush inflammation, sweet potato refills glycogen. Your legs will thank you tomorrow.',
       category: 'dinner',
       calories: 580, protein: 44, carbs: 52, fat: 16,
-      ingredients: ['200g salmon fillet', '1 large sweet potato', '2 cups spinach', '1 tbsp olive oil', 'Lemon, dill, garlic'],
-      instructions: 'Bake sweet potato 45min at 200°C. Season and pan-sear salmon 4 min each side. Wilt spinach. Serve.',
+      ingredients: ['200g salmon fillet', '1 large sweet potato', '2 cups baby spinach', '1 tbsp olive oil', '1 lemon', 'Fresh dill', '3 garlic cloves'],
+      instructions: 'Bake sweet potato 200C 45 min. Season salmon with salt, dill, garlic. Pan-sear 4 min each side. Wilt spinach in same pan. Serve with lemon.',
       photo: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=800&h=600&fit=crop',
       authorId: uid('sofiamendez'), authorName: 'Sofia Mendez', authorAvatar: DEMO_USERS[1].avatar,
-      saves: 203, createdAt: hoursAgo(144),
+      saves: 278, createdAt: hoursAgo(120),
+    },
+    {
+      name: 'Protein Pancake Stack',
+      description: '5 ingredients, 10 minutes, 40g protein. Tastes like a cheat meal — macros say otherwise. My clients are obsessed.',
+      category: 'breakfast',
+      calories: 440, protein: 40, carbs: 38, fat: 12,
+      ingredients: ['2 scoops vanilla protein powder', '2 eggs', '1 ripe banana (mashed)', '1 tsp baking powder', '2 tbsp Greek yogurt', 'Blueberries', 'Sugar-free maple syrup'],
+      instructions: 'Mash banana. Mix all ingredients except blueberries to smooth batter. Medium heat non-stick pan, 2 min per side. Stack and top with blueberries and syrup.',
+      photo: 'https://images.unsplash.com/photo-1528207776546-365bb710ee93?w=800&h=600&fit=crop',
+      authorId: uid('sofiamendez'), authorName: 'Sofia Mendez', authorAvatar: DEMO_USERS[1].avatar,
+      saves: 421, createdAt: hoursAgo(144),
+    },
+    {
+      name: 'Turkey & Avocado Power Wrap',
+      description: 'High protein, healthy fats, ready in 5 minutes. For when you train at lunch and need to eat fast — 38g protein, zero cooking.',
+      category: 'lunch',
+      calories: 490, protein: 38, carbs: 32, fat: 20,
+      ingredients: ['200g sliced turkey breast', '1 whole grain wrap', '1 avocado (sliced)', 'Baby spinach', '2 tbsp hummus', 'Cherry tomatoes', 'Lemon'],
+      instructions: 'Spread hummus on wrap. Layer spinach, turkey, avocado, tomatoes. Squeeze lemon. Wrap tightly and cut diagonally.',
+      photo: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=800&h=600&fit=crop',
+      authorId: uid('marcusbell'), authorName: 'Marcus Bell', authorAvatar: DEMO_USERS[4].avatar,
+      saves: 98, createdAt: hoursAgo(168),
+    },
+    {
+      name: 'Post-Run Green Smoothie Bowl',
+      description: 'Cooldown in a bowl. 30g protein + electrolytes + antioxidants. Non-negotiable after every long run — cold, replenishing, and actually filling.',
+      category: 'smoothie',
+      calories: 380, protein: 30, carbs: 45, fat: 9,
+      ingredients: ['2 frozen bananas', '1 cup frozen mango', '2 cups baby spinach', '1 scoop vanilla protein', '200ml coconut water', 'Granola', 'Kiwi', 'Hemp seeds'],
+      instructions: 'Blend bananas, mango, spinach, protein, coconut water until thick. Pour into bowl — thick enough for a spoon. Top with granola, kiwi slices, hemp seeds.',
+      photo: 'https://images.unsplash.com/photo-1490885578174-acda8905c2c6?w=800&h=600&fit=crop',
+      authorId: uid('lunapark'), authorName: 'Luna Park', authorAvatar: DEMO_USERS[5].avatar,
+      saves: 167, createdAt: hoursAgo(192),
+    },
+    {
+      name: 'Egg White & Feta Omelette',
+      description: 'The ultimate cut-phase breakfast. 6 egg whites = 21g protein at under 280 calories. Add avocado if you are bulking.',
+      category: 'breakfast',
+      calories: 280, protein: 32, carbs: 12, fat: 8,
+      ingredients: ['6 egg whites', '1 whole egg', 'Red bell pepper (diced)', 'Mushrooms (sliced)', 'Baby spinach', '30g feta cheese', 'Fresh herbs', 'Olive oil spray'],
+      instructions: 'Whisk egg whites and whole egg. Spray pan, saute vegetables 3 min. Pour eggs over veggies. Cook on low 4 min until set. Fold, top with feta and herbs.',
+      photo: 'https://images.unsplash.com/photo-1551183053-bf91798d558a?w=800&h=600&fit=crop',
+      authorId: uid('alexcarter'), authorName: 'Alex Carter', authorAvatar: DEMO_USERS[0].avatar,
+      saves: 145, createdAt: hoursAgo(216),
+    },
+    {
+      name: 'Cottage Cheese & Honey Power Bowl',
+      description: 'Bodybuilders have eaten this for 50 years for a reason — 28g casein protein. Perfect before bed for overnight muscle repair.',
+      category: 'snack',
+      calories: 320, protein: 28, carbs: 22, fat: 10,
+      ingredients: ['250g low-fat cottage cheese', '1 tbsp honey', 'Handful walnuts', 'Peach or berries', 'Flaxseeds', 'Cinnamon'],
+      instructions: 'Scoop cottage cheese into bowl. Drizzle honey. Top with walnuts, fruit, flaxseeds and cinnamon. Best eaten 30-60 min before sleep.',
+      photo: 'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=800&h=600&fit=crop',
+      authorId: uid('priyasharma'), authorName: 'Priya Sharma', authorAvatar: DEMO_USERS[3].avatar,
+      saves: 88, createdAt: hoursAgo(240),
     },
   ];
   for (const meal of meals) {
@@ -577,11 +632,13 @@ async function seedAll() {
   }
   console.log(`✅ Nutrition logs (7 days)`);
 
-  // ── 12. Progress Photos (for owner) ──────────────────────────────────────
+  // ── 12. Progress Photos (for owner — 12-week transformation) ────────────
   const progressPhotos = [
-    { userId: ownerUid, url: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600&h=800&fit=crop', caption: 'Week 1 — Starting point 💪', weight: 88, createdAt: hoursAgo(504) },
-    { userId: ownerUid, url: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=600&h=800&fit=crop', caption: 'Week 4 — Feeling the difference!', weight: 86, createdAt: hoursAgo(336) },
-    { userId: ownerUid, url: 'https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=600&h=800&fit=crop', caption: 'Week 8 — Visible progress 🔥', weight: 83, createdAt: hoursAgo(168) },
+    { userId: ownerUid, url: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600&h=800&fit=crop', caption: 'Week 1 — Starting point. 88kg. Time to get to work. 💪', weight: 88, createdAt: hoursAgo(840) },
+    { userId: ownerUid, url: 'https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=600&h=800&fit=crop', caption: 'Week 3 — Down 1.5kg. Strength going up. Sleep dialled in.', weight: 86.5, createdAt: hoursAgo(672) },
+    { userId: ownerUid, url: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=600&h=800&fit=crop', caption: 'Week 6 — Mid-point check-in. 85kg. Veins starting to show 🔥', weight: 85, createdAt: hoursAgo(504) },
+    { userId: ownerUid, url: 'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=600&h=800&fit=crop', caption: 'Week 8 — 83.5kg. Bench hit 110kg today. Best week yet.', weight: 83.5, createdAt: hoursAgo(336) },
+    { userId: ownerUid, url: 'https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=600&h=800&fit=crop', caption: 'Week 12 — FINAL. 81kg. -7kg total. Strongest I have ever been. 🏆', weight: 81, createdAt: hoursAgo(168) },
   ];
   for (const photo of progressPhotos) {
     await db.collection('progressPhotos').add(photo);
@@ -715,57 +772,77 @@ async function seedAll() {
   }, { merge: true });
   console.log('✅ Trainer profiles (Sofia + Luna)');
 
-  // ── 18. Gyms ─────────────────────────────────────────────────────────────
+  // ── 18. Gyms — Istanbul, Turkey ──────────────────────────────────────────
   const gyms = [
     {
-      name: 'Iron Palace Gym', address: '42 Fitness Boulevard', city: 'Dubai', country: 'UAE',
-      description: "Dubai's premier strength and conditioning gym. State-of-the-art equipment, world-class coaches, and a community that pushes you to be your best.",
-      lat: 25.2048, lng: 55.2708,
-      photo: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&h=500&fit=crop',
-      amenities: ['Free Weights', 'Cardio Machines', 'Sauna', 'Personal Training', 'Group Classes', 'Cafe'],
-      rating: 4.8, ratingCount: 124, memberCount: 340,
-      hours: { monday: '05:30–23:00', tuesday: '05:30–23:00', wednesday: '05:30–23:00', thursday: '05:30–23:00', friday: '06:00–22:00', saturday: '07:00–21:00', sunday: '08:00–18:00' },
+      name: "MacFit Nisantasi", address: "Vali Konagi Cad. No:6, Nisantasi", city: "Istanbul", country: "Turkey",
+      description: "MacFit is Turkey's premier gym chain and Nisantasi is their flagship location. Technogym equipment, sauna, steam room, and world-class personal trainers in Istanbul's most fashionable district.",
+      lat: 41.0485, lng: 28.9927,
+      photo: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&h=500&fit=crop",
+      amenities: ["Free Weights", "Cardio Machines", "Sauna", "Steam Room", "Personal Training", "Group Classes", "Juice Bar", "Lockers"],
+      rating: 4.7, ratingCount: 312, memberCount: 850,
+      hours: { monday: "06:00-23:00", tuesday: "06:00-23:00", wednesday: "06:00-23:00", thursday: "06:00-23:00", friday: "06:00-22:00", saturday: "08:00-21:00", sunday: "09:00-20:00" },
       createdBy: ownerUid, createdAt: hoursAgo(720),
     },
     {
-      name: 'EliteFit Studio', address: '118 Ocean Drive', city: 'Miami', country: 'USA',
-      description: "South Beach's top functional fitness studio. HIIT, strength, and mobility in a boutique setting. Home gym of Sofia Mendez.",
-      lat: 25.7907, lng: -80.1300,
-      photo: 'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=800&h=500&fit=crop',
-      amenities: ['Free Weights', 'HIIT Area', 'Yoga Studio', 'Personal Training', 'Showers', 'Parking'],
-      rating: 4.9, ratingCount: 87, memberCount: 210,
-      hours: { monday: '06:00–22:00', tuesday: '06:00–22:00', wednesday: '06:00–22:00', thursday: '06:00–22:00', friday: '06:00–21:00', saturday: '08:00–20:00', sunday: '09:00–17:00' },
+      name: "Gold's Gym Istanbul Levent", address: "Buyukdere Cad. No:127, Levent", city: "Istanbul", country: "Turkey",
+      description: "The legendary Gold's Gym brand in Istanbul's business district. Serious iron, Olympic platforms, and a powerlifting community unlike any other in the city. Where deals and deadlifts both get closed.",
+      lat: 41.0789, lng: 29.0131,
+      photo: "https://images.unsplash.com/photo-1517963879433-6ad2b056d712?w=800&h=500&fit=crop",
+      amenities: ["Free Weights", "Powerlifting Platforms", "Chalk Allowed", "Strongman Corner", "Personal Training", "Protein Bar", "Lockers", "Parking"],
+      rating: 4.8, ratingCount: 189, memberCount: 620,
+      hours: { monday: "05:30-23:30", tuesday: "05:30-23:30", wednesday: "05:30-23:30", thursday: "05:30-23:30", friday: "05:30-22:00", saturday: "07:00-21:00", sunday: "08:00-20:00" },
       createdBy: ownerUid, createdAt: hoursAgo(600),
     },
     {
-      name: 'Iron House Gym', address: '7 Muscle Beach Ave', city: 'Los Angeles', country: 'USA',
-      description: 'Old-school heavy iron gym. No fluff — just plates, chalk, and serious lifters. Home of multiple powerlifting state champions.',
-      lat: 34.0522, lng: -118.2437,
-      photo: 'https://images.unsplash.com/photo-1517963879433-6ad2b056d712?w=800&h=500&fit=crop',
-      amenities: ['Free Weights', 'Powerlifting Platforms', 'Chalk Allowed', 'Strongman Equipment', 'Lockers'],
-      rating: 4.7, ratingCount: 203, memberCount: 180,
-      hours: { monday: '04:00–24:00', tuesday: '04:00–24:00', wednesday: '04:00–24:00', thursday: '04:00–24:00', friday: '04:00–22:00', saturday: '06:00–22:00', sunday: '07:00–20:00' },
+      name: "CrossFit Istanbul Maslak", address: "Maslak Mah. Ahi Evran Cad. No:6, Sariyer", city: "Istanbul", country: "Turkey",
+      description: "Istanbul's most competitive CrossFit affiliate. Daily WODs for all levels, Olympic lifting coaching, and a tight-knit community of 400+ athletes. In-house competitions every quarter.",
+      lat: 41.1090, lng: 29.0237,
+      photo: "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=800&h=500&fit=crop",
+      amenities: ["CrossFit Rigs", "Olympic Platforms", "Assault Bikes", "Rowing Machines", "Pull-up Bars", "Group WODs", "Mobility Area", "Showers"],
+      rating: 4.9, ratingCount: 241, memberCount: 410,
+      hours: { monday: "06:00-22:00", tuesday: "06:00-22:00", wednesday: "06:00-22:00", thursday: "06:00-22:00", friday: "06:00-21:00", saturday: "08:00-19:00", sunday: "09:00-17:00" },
       createdBy: ownerUid, createdAt: hoursAgo(500),
     },
     {
-      name: 'CrossFit Seoul', address: '23 Gangnam-daero', city: 'Seoul', country: 'South Korea',
-      description: 'Premier CrossFit box in Gangnam. Daily WODs, Olympic lifting, and a community like no other. Owned by Luna Park.',
-      lat: 37.4979, lng: 127.0276,
-      photo: 'https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?w=800&h=500&fit=crop',
-      amenities: ['CrossFit Equipment', 'Olympic Platforms', 'Pull-up Rigs', 'Group Classes', 'Showers'],
-      rating: 4.9, ratingCount: 156, memberCount: 290,
-      hours: { monday: '06:00–22:00', tuesday: '06:00–22:00', wednesday: '06:00–22:00', thursday: '06:00–22:00', friday: '06:00–21:00', saturday: '08:00–18:00', sunday: 'Closed' },
+      name: "Be Fit Spor Kadikoy", address: "Moda Cad. No:35, Kadikoy", city: "Istanbul", country: "Turkey",
+      description: "The go-to gym on the Asian side of Istanbul. Warm community, great coaches, and a rooftop stretch zone with Bosphorus views. Functional training meets real results.",
+      lat: 40.9867, lng: 29.0298,
+      photo: "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=800&h=500&fit=crop",
+      amenities: ["Free Weights", "Functional Training Area", "Rooftop Stretch Zone", "HIIT Studio", "Yoga Classes", "Personal Training", "Showers", "Towel Service"],
+      rating: 4.8, ratingCount: 156, memberCount: 490,
+      hours: { monday: "06:30-22:30", tuesday: "06:30-22:30", wednesday: "06:30-22:30", thursday: "06:30-22:30", friday: "06:30-21:30", saturday: "08:00-20:00", sunday: "09:00-18:00" },
       createdBy: ownerUid, createdAt: hoursAgo(400),
     },
     {
-      name: 'City Athletics NYC', address: '500 W 36th St', city: 'New York', country: 'USA',
-      description: 'Full-service athletic facility in Midtown Manhattan. Running track, weights, cardio, and Olympic-size pool.',
-      lat: 40.7549, lng: -74.0020,
-      photo: 'https://images.unsplash.com/photo-1593079831268-3381b0db4a77?w=800&h=500&fit=crop',
-      amenities: ['Running Track', 'Free Weights', 'Cardio Machines', 'Pool', 'Basketball Court', 'Sauna', 'Cafe'],
-      rating: 4.6, ratingCount: 312, memberCount: 1200,
-      hours: { monday: '05:00–23:00', tuesday: '05:00–23:00', wednesday: '05:00–23:00', thursday: '05:00–23:00', friday: '05:00–22:00', saturday: '06:00–21:00', sunday: '07:00–20:00' },
+      name: "Power House Gym Besiktas", address: "Ihlamurdere Cad. No:12, Besiktas", city: "Istanbul", country: "Turkey",
+      description: "Istanbul's original hardcore gym, open since 1998. Old-school iron paradise — 3 floors of equipment, no fluff, just hard work. Regular clients include Turkish national team athletes.",
+      lat: 41.0430, lng: 29.0058,
+      photo: "https://images.unsplash.com/photo-1593079831268-3381b0db4a77?w=800&h=500&fit=crop",
+      amenities: ["3 Floors of Equipment", "Free Weights to 150kg", "Boxing Ring", "Sauna", "Personal Training", "Sports Nutrition Shop", "Lockers"],
+      rating: 4.6, ratingCount: 408, memberCount: 730,
+      hours: { monday: "07:00-23:00", tuesday: "07:00-23:00", wednesday: "07:00-23:00", thursday: "07:00-23:00", friday: "07:00-22:00", saturday: "08:00-22:00", sunday: "09:00-21:00" },
       createdBy: ownerUid, createdAt: hoursAgo(300),
+    },
+    {
+      name: "FitKule Levent", address: "Kule Cad. No:4, 4. Levent", city: "Istanbul", country: "Turkey",
+      description: "Ultra-modern fitness club inside the Kule business towers. Corporate memberships, executive lockers, hammam, and premium recovery. Istanbul's finance crowd trains here as hard as they work.",
+      lat: 41.0784, lng: 29.0122,
+      photo: "https://images.unsplash.com/photo-1540497077202-7c8a3999166f?w=800&h=500&fit=crop",
+      amenities: ["Premium Technogym Equipment", "Heated Pool", "Hammam", "Sauna", "Ice Bath", "Personal Training", "Pilates Studio", "Nutrition Consultation", "Valet Parking"],
+      rating: 4.9, ratingCount: 97, memberCount: 280,
+      hours: { monday: "06:00-22:00", tuesday: "06:00-22:00", wednesday: "06:00-22:00", thursday: "06:00-22:00", friday: "06:00-21:00", saturday: "08:00-20:00", sunday: "Closed" },
+      createdBy: ownerUid, createdAt: hoursAgo(200),
+    },
+    {
+      name: "Urban Fit Sisli", address: "Halaskargazi Cad. No:104, Sisli", city: "Istanbul", country: "Turkey",
+      description: "Boutique fitness studio in central Sisli. Famous for 45-min HIIT circuit classes that sell out daily. Strict capacity limits — you always get a locker and a coach who knows your name.",
+      lat: 41.0625, lng: 28.9875,
+      photo: "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?w=800&h=500&fit=crop",
+      amenities: ["HIIT Studio", "Spin Bikes", "TRX Area", "Boxing Bags", "Group Classes", "Cold Shower", "Towel Service", "App Booking"],
+      rating: 4.7, ratingCount: 203, memberCount: 320,
+      hours: { monday: "06:00-21:00", tuesday: "06:00-21:00", wednesday: "06:00-21:00", thursday: "06:00-21:00", friday: "06:00-20:00", saturday: "08:00-18:00", sunday: "09:00-15:00" },
+      createdBy: ownerUid, createdAt: hoursAgo(100),
     },
   ];
   for (const gym of gyms) await db.collection('gyms').add(gym);
@@ -778,11 +855,11 @@ async function seedAll() {
   console.log('  🎬 Reels       — 2 video clips (Luna + Alex)');
   console.log('  📋 Programs    — 4 programs (Sofia, Alex, Luna, yours)');
   console.log('  🏆 PRs         — 12 personal records with history charts');
-  console.log('  🥗 Meals       — 5 healthy meals (trainer curated)');
+  console.log('  🥗 Meals       — 10 healthy meals (trainer curated)');
   console.log('  🔥 Habits      — 5 habits with streaks up to 30 days');
   console.log('  🎯 Goals       — 4 active goals with progress charts');
   console.log('  📊 Nutrition   — 7 days of macro tracking');
-  console.log('  📸 Progress    — 3 progress photos (8-week journey)');
+  console.log('  📸 Progress    — 5 progress photos (12-week transformation)');
   console.log('  👥 Communities — 8 communities with real member counts');
   console.log('  💬 DMs         — 3 conversations (Sofia, Marcus, Alex)');
   console.log('  🏅 Leaderboard — 7 users ranked by XP\n');

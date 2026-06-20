@@ -46,6 +46,7 @@ interface Meal {
 
 interface MealsPageProps {
   currentUser: User | null;
+  onGoToLog?: () => void;
 }
 
 function MacroBadge({ icon: Icon, label, value, color }: { icon: any; label: string; value: number; color: string }) {
@@ -75,7 +76,7 @@ function MealCardSkeleton() {
   );
 }
 
-export function MealsPage({ currentUser }: MealsPageProps) {
+export function MealsPage({ currentUser, onGoToLog }: MealsPageProps) {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState('all');
@@ -159,6 +160,8 @@ export function MealsPage({ currentUser }: MealsPageProps) {
         body: JSON.stringify({ date: today, meals: [...existing, newEntry] }),
       });
       toast.success(`✅ ${meal.name} added to today's log!`);
+      setSelected(null);
+      setTimeout(() => onGoToLog?.(), 400);
     } catch {
       toast.error('Could not add to log');
     } finally {

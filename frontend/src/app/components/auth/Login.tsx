@@ -801,6 +801,9 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
         <div style={{ width: 28, flexShrink: 0 }} />
       </div>
 
+      {/* Forgot password modal */}
+      {showForgot && <ForgotModal onClose={() => setShowForgot(false)} />}
+
     </div>
   );
 }

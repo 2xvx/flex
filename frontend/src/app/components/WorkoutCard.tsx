@@ -57,6 +57,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
   const [followLoading, setFollowLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [videoError, setVideoError] = useState(false);
   // Bookmark + repost state
   const [isSaved, setIsSaved] = useState(false);
   const [isReposted, setIsReposted] = useState(!!post.isReposted);
@@ -390,7 +391,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
       </div>
 
       {/* Workout Video */}
-      {post.videoUrl && (
+      {post.videoUrl && !videoError && (
         <div className="relative overflow-hidden bg-black mx-0">
           <video
             src={post.videoUrl}
@@ -398,13 +399,13 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
             playsInline
             className="w-full max-h-[480px] object-contain"
             preload="metadata"
-            onError={(e) => console.error('Video load error:', (e.target as HTMLVideoElement).error)}
+            onError={() => setVideoError(true)}
           />
         </div>
       )}
 
       {/* Workout Image */}
-      {post.image && !post.videoUrl && (
+      {post.image && (!post.videoUrl || videoError) && (
         <div
           className="relative aspect-[4/3] overflow-hidden group cursor-pointer"
           onClick={() => setExpandedImage(post.image!)}
@@ -633,7 +634,7 @@ export function WorkoutCard({ post, onLike, onComment, onRepost, onShare, onPost
         <Button
           variant="ghost" size="sm"
           className={`gap-1.5 transition-all duration-200 ${isReposted ? 'text-green-400 bg-green-500/10' : 'text-white/40 hover:text-green-400 hover:bg-green-500/10'}`}
-          onClick={() => { onRepost?.(post.id); setIsReposted(true); }}
+          onClick={() => { onRepost?.(post.id); setIsReposted(prev => !prev); }}
         >
           <Repeat2 className="w-4 h-4" />
         </Button>

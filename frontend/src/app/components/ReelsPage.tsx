@@ -132,6 +132,7 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: ReelsPagePr
   const [joiningChallenge, setJoiningChallenge] = useState(false);
   const [joinedChallenges, setJoinedChallenges] = useState<Set<string>>(new Set());
 
+  const [isMuted, setIsMuted] = useState(true);
   const videoRef    = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const touchStartY = useRef(0);
@@ -537,7 +538,7 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: ReelsPagePr
                 webkit-playsinline="true"
                 x-webkit-airplay="allow"
                 preload="auto"
-                muted={false}
+                muted={isMuted}
                 onClick={togglePlay}
                 onError={() => setVideoPaused(true)}
               />
@@ -556,6 +557,16 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: ReelsPagePr
               </button>
             )}
 
+            {/* Mute toggle */}
+            {reel.videoUrl && (
+              <button
+                onClick={e => { e.stopPropagation(); setIsMuted(m => !m); }}
+                className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white text-xs font-bold"
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted ? '🔇' : '🔊'}
+              </button>
+            )}
             {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 pointer-events-none" />
 

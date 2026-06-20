@@ -17,9 +17,9 @@ const FIREBASE_WEB_API_KEY = process.env.FIREBASE_WEB_API_KEY || '';
 
 // ─── Nodemailer / Brevo SMTP ──────────────────────────────────────────────────
 const mailer = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.BREVO_SMTP_USER || '',
     pass: process.env.BREVO_SMTP_KEY  || '',
@@ -105,6 +105,7 @@ app.use(cors({
 
 // Limit JSON body size to prevent payload flooding
 app.use(express.json({ limit: '500mb' }));
+app.use('/videos', require('express').static(require('path').join(__dirname, 'public/videos')));
 
 // ─── RATE LIMITING (zero-dependency, in-memory) ───────────────────────────────
 // Stores hit timestamps per IP in a Map. Old entries are evicted each request.
