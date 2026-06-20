@@ -2051,6 +2051,40 @@ app.get('/api/users/search', async (req, res) => {
 // PROFILE & TRAINER ROUTES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ─── GET USER (bare) ──────────────────────────────────────────────────────────
+// Lightweight user lookup used by MessagesPage, DuelsPage, TrainPage.
+// Returns basic profile fields + their posts array.
+app.get('/api/users/:uid', async (req, res) => {
+  const { uid } = req.params;
+  if (!uid) return res.status(400).json({ error: 'Missing uid' });
+  try {
+    const doc = await db.collection('users').doc(uid).get();
+    if (!doc.exists) return res.status(404).json({ error: 'User not found' });
+    const d = doc.data();
+    // Fetch their posts so TrainPage can check for deload
+    const postsSnap = await db.collection('posts')
+      .where('user.id', '==', uid)
+      .orderBy('createdAt', 'desc').limit(20).get();
+    const posts = postsSnap.docs.map(p => ({ id: p.id, ...p.data() }));
+    res.json({
+      uid,
+      displayName: d.displayName || d.name || 'Athlete',
+      name: d.displayName || d.name || 'Athlete',
+      username: d.username || '',
+      avatar: d.avatar || '',
+      bio: d.bio || '',
+      accountType: d.accountType || 'user',
+      fitnessLevel: d.fitnessLevel || '',
+      fitnessGoal: d.fitnessGoal || '',
+      followers: d.followers || 0,
+      following: d.following || 0,
+      workouts: d.workouts || 0,
+      gym: d.gym || '',
+      posts,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── GET USER PROFILE ─────────────────────────────────────────────────────────
 // Returns the Firestore user doc + all their posts.
 // Used by ProfilePage to render any user's public profile.
@@ -4401,12 +4435,12 @@ app.post('/api/trainer/my-gym', verifyToken, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/gyms — list all gyms
-app.get('/api/gyms', verifyToken, async (req, res) => {
+app.get('/api/gyms', async (req, res) => {
   try {
     const snap = await db.collection('gyms').get();
     const gyms = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     gyms.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-    res.json(gyms);
+    res.json({ gyms });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4440,7 +4474,7 @@ app.post('/api/gyms', verifyToken, async (req, res) => {
 });
 
 // GET /api/gyms/:id — single gym
-app.get('/api/gyms/:id', verifyToken, async (req, res) => {
+app.get('/api/gyms/:id', async (req, res) => {
   try {
     const snap = await db.collection('gyms').doc(req.params.id).get();
     if (!snap.exists) return res.status(404).json({ error: 'Gym not found' });
@@ -4449,7 +4483,7 @@ app.get('/api/gyms/:id', verifyToken, async (req, res) => {
 });
 
 // GET /api/gyms/:id/members — users who have checked into this gym
-app.get('/api/gyms/:id/members', verifyToken, async (req, res) => {
+app.get('/api/gyms/:id/members', async (req, res) => {
   try {
     const gymSnap = await db.collection('gyms').doc(req.params.id).get();
     if (!gymSnap.exists) return res.status(404).json({ error: 'Gym not found' });
@@ -4464,7 +4498,7 @@ app.get('/api/gyms/:id/members', verifyToken, async (req, res) => {
       avatar: d.data().avatar || null,
       fitnessLevel: d.data().fitnessLevel || '',
     }));
-    res.json(members);
+    res.json({ members });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
