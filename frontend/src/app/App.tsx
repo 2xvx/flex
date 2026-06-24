@@ -19,7 +19,7 @@ import {
   demoLogin,
   onAuthChange,
 } from "../services/authService";
-import { initPushNotifications, removePushToken } from "../services/notificationService";
+import { initPushNotifications, removePushToken, getNotifications } from "../services/notificationService";
 import { dailyLoginXP } from "../services/xpService";
 import XPLevelUp from "./components/XPLevelUp";
 import { AdminPage }          from "./components/AdminPage";
@@ -43,7 +43,7 @@ import { GymsPage }           from "./components/GymsPage";
 import { ExplorePage }        from "./components/ExplorePage";
 import { CommunitiesPage }    from "./components/CommunitiesPage";
 
-const FULL_HEIGHT_VIEWS = ["community", "clips"];
+const FULL_HEIGHT_VIEWS = ["community", "clips", "messages"];
 
 const NO_RIGHT_SIDEBAR = [
   "community", "clips", "discover", "train", "health",
@@ -87,6 +87,13 @@ export default function App() {
     const unsub = onAuthChange(async (user: User | null) => {
       if (user) {
         setCurrentUser(user);
+        // If they signed up but haven't verified OTP yet, show OTP screen
+        const pendingEmail = localStorage.getItem('pendingOTPEmail');
+        if (pendingEmail) {
+          setPendingOTP({ user, maskedEmail: pendingEmail });
+          setAuthLoading(false);
+          return;
+        }
         setIsAuthenticated(true);
         setAuthLoading(false);
         try {
@@ -95,7 +102,7 @@ export default function App() {
             setLevelUpInfo({ level: result.level, totalXP: result.totalXP });
           }
         } catch {}
-        try { await initPushNotifications(user.id); } catch {}
+        // FCM disabled — requires Firebase Cloud Messaging VAPID key setup
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
@@ -104,6 +111,74 @@ export default function App() {
     });
     return () => unsub?.();
   }, []);
+
+  // ── Global XP level-up listener ───────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.level != null && detail?.totalXP != null) {
+        setLevelUpInfo({ level: detail.level, totalXP: detail.totalXP });
+      }
+    };
+    window.addEventListener('xp-level-up', handler);
+    return () => window.removeEventListener('xp-level-up', handler);
+  }, []);
+
+  // ── Background notification poller ─────────────────────────────────────────
+  // Polls every 30s and toasts any new unread notifications.
+  const seenNotifIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const NOTIF_ICONS: Record<string, string> = {
+      follow:           '👤',
+      follow_request:   '👤',
+      follow_accepted:  '✅',
+      like_hype:        '🔥',
+      badge_earned:     '🏅',
+      duel_request:     '⚔️',
+      duel_update:      '📣',
+      streak_warning:   '⚡',
+      trainer_shoutout: '⭐',
+      new_message:      '💬',
+    };
+
+    const poll = async () => {
+      try {
+        const notifs = await getNotifications(currentUser.id);
+        const unread = notifs.filter((n: any) => !n.isRead);
+        setUnreadNotifCount(unread.length);
+
+        // First poll: just seed the seen set, don't toast everything
+        if (seenNotifIds.current.size === 0) {
+          notifs.forEach((n: any) => seenNotifIds.current.add(n.id));
+          return;
+        }
+
+        // Subsequent polls: toast only newly appeared notifications
+        const fresh = unread.filter((n: any) => !seenNotifIds.current.has(n.id));
+        fresh.forEach((n: any) => {
+          seenNotifIds.current.add(n.id);
+          const icon = NOTIF_ICONS[n.type] ?? '🔔';
+          const isMsg = n.type === 'new_message';
+          toast(`${icon} ${n.title}`, {
+            description: n.message,
+            duration: 5000,
+            action: {
+              label: isMsg ? 'Open' : 'View',
+              onClick: () => isMsg ? navigateTo('community') : setShowNotifications(true),
+            },
+          });
+        });
+        // Also add all seen notif IDs to prevent re-toasting on next poll
+        notifs.forEach((n: any) => seenNotifIds.current.add(n.id));
+      } catch { /* silent — don't bother user with poll errors */ }
+    };
+
+    poll(); // immediate first check
+    const interval = setInterval(poll, 10_000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
 
   // ── URL sync ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -130,6 +205,10 @@ export default function App() {
       setViewingPostId(dest.slice(5));
       setCurrentView("post");
       return;
+    }
+    // Bug fix: when navigating to own profile (no UID suffix), always reset to own profile
+    if (dest === "profile") {
+      setViewingUserId(currentUser?.id || "");
     }
     setCurrentView(dest);
   };
@@ -174,8 +253,9 @@ export default function App() {
       // SignUp form already created the account — just sign in to get the auth token
       const user = await signIn(data.email, data.password);
       setCurrentUser(user);
-      setIsAuthenticated(true);
+      // Do NOT set isAuthenticated yet — wait for OTP verification
       const masked = data.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
+      localStorage.setItem('pendingOTPEmail', masked);
       setPendingOTP({ user, maskedEmail: masked });
     } catch (err: any) {
       toast.error(err.message || "Sign up failed");
@@ -183,7 +263,9 @@ export default function App() {
   };
 
   const handleOTPVerified = () => {
+    localStorage.removeItem('pendingOTPEmail');
     setPendingOTP(null);
+    setIsAuthenticated(true);
     setShowWelcome(true);
     navigateTo("feed");
   };
@@ -325,6 +407,7 @@ export default function App() {
               isCreateDialogOpen={isCreatePostOpen}
               onCreateDialogChange={setIsCreatePostOpen}
               onViewPost={(pid) => { setViewingPostId(pid); navigateTo("post"); }}
+              onViewProfile={handleViewProfile}
             />
           )}
 
@@ -336,6 +419,11 @@ export default function App() {
               onNavigate={navigateTo}
               onViewProfile={handleViewProfile}
               onViewFollowers={handleViewFollowers}
+              onCurrentUserUpdate={(updates) => setCurrentUser(prev => {
+                const next = prev ? { ...prev, ...updates } : prev;
+                if (next) localStorage.setItem('currentUser', JSON.stringify(next));
+                return next;
+              })}
             />
           )}
 
@@ -384,6 +472,7 @@ export default function App() {
               onViewProfile={handleViewProfile}
               onNavigate={navigateTo}
               onFollowRequestsViewed={() => setPendingFollowRequestCount(0)}
+              onOpenCreatePost={() => setIsCreatePostOpen(true)}
             />
           )}
 

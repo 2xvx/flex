@@ -8,6 +8,7 @@ import { DuelsPage } from './DuelsPage';
 import { WeeklyRecapPage } from './WeeklyRecapPage';
 import { LiveWorkoutPage } from './LiveWorkoutPage';
 import { LiveStreamingPage } from './LiveStreamingPage';
+import { TrainTogetherPage } from './TrainTogetherPage';
 import { authFetch } from '../../utils/authToken';
 import { User } from '../types';
 
@@ -30,7 +31,7 @@ import { API } from '../../config';
 const TABS = [
   { id: 'workouts',     label: 'My Workouts',  Icon: Dumbbell      },
   { id: 'programs',     label: 'Programs',      Icon: BookOpen      },
-  { id: 'challenges',   label: 'Challenges',    Icon: Trophy        },
+  { id: 'challenges',   label: 'Train Together', Icon: Trophy        },
   { id: 'recap',        label: 'Weekly Recap',  Icon: CalendarCheck },
 ];
 
@@ -208,6 +209,8 @@ export function TrainPage({ currentUser }: Props) {
 
 
       {tab === 'recap'       && <WeeklyRecapPage currentUser={currentUser} />}
+
+      {tab === 'challenges'  && <TrainTogetherPage currentUser={currentUser} />}
     </div>
   );
 }

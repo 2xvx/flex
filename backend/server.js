@@ -103,9 +103,39 @@ app.use(cors({
   credentials: true,
 }));
 
-// Limit JSON body size to prevent payload flooding
+const path = require('path');
+const fs   = require('fs');
+
+const videoDir = path.join(__dirname, 'public/videos');
+if (!fs.existsSync(videoDir)) fs.mkdirSync(videoDir, { recursive: true });
+
+app.use('/videos', require('express').static(videoDir));
+
+// ── Video upload — direct stream pipe, bypasses all body-parsing middleware ─────
+app.post('/api/upload-video', (req, res) => {
+  const origName = String(req.query.filename || 'video.mp4');
+  const ext      = path.extname(origName) || '.mp4';
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`;
+  const filePath = path.join(videoDir, filename);
+  const out      = fs.createWriteStream(filePath);
+  let size       = 0;
+  req.on('data',  chunk => { size += chunk.length; out.write(chunk); });
+  req.on('end',   ()    => {
+    out.end(() => {
+      if (size === 0) {
+        fs.unlink(filePath, () => {});
+        return res.status(400).json({ error: 'No video data received' });
+      }
+      const url = `http://localhost:5000/videos/${filename}`;
+      console.log('✅ Video saved:', filename, `(${(size/1024/1024).toFixed(1)} MB)`);
+      res.json({ url });
+    });
+  });
+  req.on('error', err  => { out.destroy(); fs.unlink(filePath, () => {}); res.status(500).json({ error: err.message }); });
+});
+
+// JSON body parser — after upload route so stream isn't pre-consumed
 app.use(express.json({ limit: '500mb' }));
-app.use('/videos', require('express').static(require('path').join(__dirname, 'public/videos')));
 
 // ─── RATE LIMITING (zero-dependency, in-memory) ───────────────────────────────
 // Stores hit timestamps per IP in a Map. Old entries are evicted each request.
@@ -202,8 +232,6 @@ const sanitize = (str, maxLen = 1000) => {
 // ─── IMAGE UPLOAD ─────────────────────────────────────────────────────────────
 // Accepts a base64-encoded image string, uploads it to Firebase Storage,
 // makes it publicly readable, and returns a permanent HTTPS URL.
-// The frontend should call this BEFORE creating a post/comment so Firestore
-// stores a URL instead of a raw base64 string.
 app.post('/api/upload', verifyToken, async (req, res) => {
   const { base64, folder = 'posts', filename } = req.body;
   if (!base64) return res.status(400).json({ error: 'base64 required' });
@@ -408,48 +436,30 @@ app.post('/api/refresh-token', async (req, res) => {
   }
 });
 
-// ─── VIDEO UPLOAD ─────────────────────────────────────────────────────────────
-// ─── VIDEO UPLOAD (local filesystem) ─────────────────────────────────────────
-// POST /api/upload-video
-// Accepts multipart/form-data with field "video".
-// Streams the file directly to Firebase Storage and returns a public URL.
-// Returns: { url: string }
 
-const multer  = require('multer');
-const pathMod = require('path');
 
-// Keep video in memory so we can pipe it to Firebase Storage
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB
-  fileFilter: (_req, file, cb) => {
-    const ok = /^video\//.test(file.mimetype) ||
-               /\.(mp4|mov|webm|avi|mkv|m4v)$/i.test(file.originalname);
-    if (ok) cb(null, true);
-    else    cb(new Error('Only video files are allowed'));
-  },
-});
+// (old Firebase Storage upload route removed — using local /api/upload-video above)
 
-app.post('/api/upload-video', verifyToken, upload.single('video'), async (req, res) => {
+// ─── EDIT POST ────────────────────────────────────────────────────────────────
+app.patch('/api/posts/:id', verifyToken, async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No video file provided' });
+    const postRef = db.collection('posts').doc(req.params.id);
+    const postDoc = await postRef.get();
+    if (!postDoc.exists) return res.status(404).json({ error: 'Post not found' });
+    const post = postDoc.data();
+    // Only the post owner can edit
+    if (post.user?.id !== req.uid) return res.status(403).json({ error: 'Not your post' });
 
-    const ext      = (req.file.originalname.split('.').pop() || 'mp4')
-                       .toLowerCase().replace('quicktime', 'mov');
-    const filename = `videos/${req.uid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const fileRef  = bucket.file(filename);
-
-    await fileRef.save(req.file.buffer, {
-      metadata: { contentType: req.file.mimetype || `video/${ext}` },
-    });
-    await fileRef.makePublic();
-
-    const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filename)}?alt=media`;
-    console.log('✅ Video uploaded to Firebase Storage:', filename,
-      `(${(req.file.size / 1024 / 1024).toFixed(1)} MB)`);
-    res.json({ url });
+    const allowed = ['workoutType','duration','calories','caption','exercises','music','isPR','image','videoUrl','visibility','mood','location'];
+    const updates = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+    updates.updatedAt = new Date().toISOString();
+    await postRef.update(updates);
+    res.json({ success: true, ...updates });
   } catch (e) {
-    console.error('Video upload error:', e);
+    console.error('Edit post error:', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -1952,6 +1962,15 @@ app.post('/api/users/:uid/unfollow', verifyToken, async (req, res) => {
     batch.update(db.collection('users').doc(targetId),   { followers: admin.firestore.FieldValue.increment(-1) });
     batch.update(db.collection('users').doc(followerId), { following: admin.firestore.FieldValue.increment(-1) });
     await batch.commit();
+    // Clamp counters to 0 if they went negative (data repair)
+    const [tDoc, fDoc] = await Promise.all([
+      db.collection('users').doc(targetId).get(),
+      db.collection('users').doc(followerId).get(),
+    ]);
+    const repairs = [];
+    if ((tDoc.data()?.followers ?? 0) < 0) repairs.push(db.collection('users').doc(targetId).update({ followers: 0 }));
+    if ((fDoc.data()?.following ?? 0) < 0) repairs.push(db.collection('users').doc(followerId).update({ following: 0 }));
+    if (repairs.length) await Promise.all(repairs);
     res.status(200).json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Unfollow failed' });
@@ -1962,7 +1981,10 @@ app.post('/api/users/:uid/unfollow', verifyToken, async (req, res) => {
 app.get('/api/users/:uid/following', async (req, res) => {
   try {
     const snap = await db.collection('follows').where('followerId', '==', req.params.uid).get();
-    const ids = snap.docs.map(d => d.data().targetId);
+    const ids = snap.docs.map(d => {
+      const data = d.data();
+      return data.targetId || data.followingId || d.id.split('_').slice(1).join('_') || null;
+    }).filter(Boolean);
     res.status(200).json({ following: ids });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch following list' });
@@ -1973,7 +1995,7 @@ app.get('/api/users/:uid/following', async (req, res) => {
 app.get('/api/users/:uid/followers', async (req, res) => {
   try {
     const snap = await db.collection('follows').where('targetId', '==', req.params.uid).get();
-    const followerIds = snap.docs.map(d => d.data().followerId);
+    const followerIds = snap.docs.map(d => d.data().followerId || d.id.split('_')[0] || null).filter(Boolean);
     if (followerIds.length === 0) return res.status(200).json({ users: [] });
     const users = [];
     for (let i = 0; i < followerIds.length; i += 10) {
@@ -1998,8 +2020,16 @@ app.get('/api/users/:uid/followers', async (req, res) => {
 // GET /api/users/:uid/following-users — returns full profiles of users :uid follows
 app.get('/api/users/:uid/following-users', async (req, res) => {
   try {
-    const snap = await db.collection('follows').where('followerId', '==', req.params.uid).get();
-    const followingIds = snap.docs.map(d => d.data().targetId);
+    const uid = req.params.uid;
+    const snap = await db.collection('follows').where('followerId', '==', uid).get();
+    console.log(`[following-users] uid=${uid} → ${snap.docs.length} follows docs found`);
+    // Filter out any docs missing targetId — fall back to parsing the doc ID (format: fromUid_targetUid)
+    const followingIds = snap.docs.map(d => {
+      const data = d.data();
+      // Prefer explicit targetId field; fall back to parsing doc ID if the field is missing
+      return data.targetId || data.followingId || d.id.split('_').slice(1).join('_') || null;
+    }).filter(Boolean);
+    console.log(`[following-users] followingIds:`, followingIds);
     if (followingIds.length === 0) return res.status(200).json({ users: [] });
     const users = [];
     for (let i = 0; i < followingIds.length; i += 10) {
@@ -2015,8 +2045,10 @@ app.get('/api/users/:uid/following-users', async (req, res) => {
         accountType: d.data().accountType,
       }));
     }
+    console.log(`[following-users] returning ${users.length} users`);
     res.status(200).json({ users });
   } catch (error) {
+    console.error('[following-users] error:', error.message);
     res.status(500).json({ error: 'Failed to fetch following users' });
   }
 });
@@ -2065,8 +2097,11 @@ app.get('/api/users/:uid', async (req, res) => {
     // Fetch their posts so TrainPage can check for deload
     const postsSnap = await db.collection('posts')
       .where('user.id', '==', uid)
-      .orderBy('createdAt', 'desc').limit(20).get();
-    const posts = postsSnap.docs.map(p => ({ id: p.id, ...p.data() }));
+      .limit(50).get();
+    const posts = postsSnap.docs
+      .map(p => ({ id: p.id, ...p.data() }))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+      .slice(0, 20);
     res.json({
       uid,
       displayName: d.displayName || d.name || 'Athlete',
@@ -2158,7 +2193,19 @@ app.get('/api/users/:uid/profile', async (req, res) => {
       }
     }
 
-    res.status(200).json({ uid, ...userData, posts, postsHidden, hasPendingRequest });
+    // Always count from the `follows` collection — source of truth (counters can drift)
+    const [followerSnap, followingSnap] = await Promise.all([
+      db.collection('follows').where('targetId',   '==', uid).get(),
+      db.collection('follows').where('followerId', '==', uid).get(),
+    ]);
+    const realFollowers = followerSnap.size;
+    const realFollowing = followingSnap.size;
+    // Repair counter if drifted
+    if (realFollowers !== (userData.followers ?? 0) || realFollowing !== (userData.following ?? 0)) {
+      db.collection('users').doc(uid).update({ followers: realFollowers, following: realFollowing }).catch(() => {});
+    }
+
+    res.status(200).json({ uid, ...userData, followers: realFollowers, following: realFollowing, posts, postsHidden, hasPendingRequest });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });
@@ -2221,6 +2268,11 @@ app.patch('/api/users/:uid/profile', verifyToken, verifyOwner, async (req, res) 
     if (fitnessLevel !== undefined) updates.fitnessLevel = sanitize(fitnessLevel, 50);
     if (gym         !== undefined) updates.gym         = sanitize(gym, 100);
     if (avatar      !== undefined) updates.avatar      = avatar;
+    if (req.body.coverPhoto !== undefined) updates.coverPhoto = req.body.coverPhoto;
+    if (req.body.displayName !== undefined) updates.displayName = sanitize(String(req.body.displayName), 60);
+    if (req.body.instagram   !== undefined) updates.instagram   = String(req.body.instagram).replace(/[^a-zA-Z0-9._]/g,'').slice(0, 30);
+    if (req.body.twitter     !== undefined) updates.twitter     = String(req.body.twitter).replace(/[^a-zA-Z0-9_]/g,'').slice(0, 30);
+    if (req.body.usernameChangedAt !== undefined) updates.usernameChangedAt = req.body.usernameChangedAt;
     if (isPrivate   !== undefined) updates.isPrivate   = !!isPrivate;
     if (typeof req.body.gender !== 'undefined') updates.gender = String(req.body.gender).slice(0, 30);
     // Pinned PRs — array of { exercise, value, unit }
@@ -2721,16 +2773,20 @@ app.get('/api/explore/trending', async (req, res) => {
     const snap  = await db.collection('posts').limit(200).get();
     const counts = {};
 
+    const NON_EXERCISES = new Set(['clip', 'Clip']);
+
     snap.docs.forEach(doc => {
       const data = doc.data();
       if ((data.createdAt || '') < since) return;
-      // Count the post's workoutType
-      if (data.workoutType) {
+      // Count the post's workoutType — skip non-exercise types
+      if (data.workoutType && !NON_EXERCISES.has(data.workoutType)) {
         counts[data.workoutType] = (counts[data.workoutType] || 0) + 1;
       }
       // Also count individual exercises inside the post
       (data.exercises || []).forEach(ex => {
-        if (ex.name) counts[ex.name] = (counts[ex.name] || 0) + 1;
+        if (ex.name && !NON_EXERCISES.has(ex.name)) {
+          counts[ex.name] = (counts[ex.name] || 0) + 1;
+        }
       });
     });
 
@@ -3071,6 +3127,135 @@ app.post('/api/users/:uid/update-streak', verifyToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── XP helpers ───────────────────────────────────────────────────────────────
+const XP_VALUES_MAP = {
+  post_created:         50,
+  post_created_first:  100,
+  pr_logged:            75,
+  comment_left:          5,
+  like_received:        10,
+  comment_received:     15,
+  follower_gained:      20,
+  trending_post:        50,
+  challenge_completed: 150,
+  profile_completed:    80,
+  level_5_reached:     500,
+  follow_5_users:       50,
+  daily_login:          10,
+  daily_task:           50,
+  goal_milestone:      120,
+  streak_7_days:       200,
+  streak_3_week:       100,
+  workout_timer:        30,
+  meal_logged:          10,
+  habit_completed:      15,
+  exercise_saved:        5,
+  duel_won:             40,
+  follow_user:           5,
+  water_goal:            8,
+  train_together:       25,
+};
+
+const XP_TIER_THRESHOLDS = [0, 200, 500, 1000, 2000, 4000, 6500, 8000];
+
+function calcXPLevel(totalXP) {
+  let level = 0;
+  for (let i = XP_TIER_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (totalXP >= XP_TIER_THRESHOLDS[i]) { level = i; break; }
+  }
+  const tierMin = XP_TIER_THRESHOLDS[level];
+  const isMax   = level === XP_TIER_THRESHOLDS.length - 1;
+  const tierMax = isMax ? Infinity : XP_TIER_THRESHOLDS[level + 1];
+  const xpInLevel = totalXP - tierMin;
+  const xpToNext  = isMax ? 0 : tierMax - totalXP;
+  return { level, xpInLevel, xpToNext, totalXP };
+}
+
+// GET /api/users/:uid/xp — return current XP state
+app.get('/api/users/:uid/xp', verifyToken, async (req, res) => {
+  const { uid } = req.params;
+  try {
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+    const totalXP = userDoc.data()?.xp || 0;
+    res.json(calcXPLevel(totalXP));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/users/:uid/xp/award — award XP for a named event (idempotent)
+app.post('/api/users/:uid/xp/award', verifyToken, async (req, res) => {
+  const { uid } = req.params;
+  const { event, idempotencyKey, amount: manualAmount } = req.body || {};
+  try {
+    const userRef = db.collection('users').doc(uid);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) return res.status(404).json({ error: 'User not found' });
+    const data = userDoc.data();
+
+    // Idempotency check — store awarded keys in user doc
+    if (idempotencyKey) {
+      const awarded = data.xpAwarded || {};
+      if (awarded[idempotencyKey]) {
+        const totalXP = data.xp || 0;
+        return res.json({ awarded: false, alreadyAwarded: true, totalXP, ...calcXPLevel(totalXP) });
+      }
+    }
+
+    const amount = manualAmount != null
+      ? Number(manualAmount)
+      : (XP_VALUES_MAP[event] || 10);
+
+    const prevXP  = data.xp || 0;
+    const newXP   = prevXP + amount;
+    const prev    = calcXPLevel(prevXP);
+    const next    = calcXPLevel(newXP);
+    const leveledUp = next.level > prev.level;
+
+    const updates = {
+      xp: newXP,
+      xpUpdatedAt: new Date().toISOString(),
+    };
+    if (idempotencyKey) {
+      updates[`xpAwarded.${idempotencyKey}`] = true;
+    }
+    await userRef.update(updates);
+
+    res.json({
+      awarded: true,
+      amount,
+      event: event || 'manual',
+      totalXP: newXP,
+      level: next.level,
+      xpInLevel: next.xpInLevel,
+      xpToNext: next.xpToNext,
+      leveledUp,
+      prevLevel: prev.level,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/xp/daily-claim — claim once-per-day XP for 'pr' activity (server-enforced)
+app.post('/api/xp/daily-claim', verifyToken, async (req, res) => {
+  const uid = req.uid;
+  const { type } = req.body || {}; // 'pr' only
+  if (!['pr'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const userRef = db.collection('users').doc(uid);
+    const doc = await userRef.get();
+    if (!doc.exists) return res.status(404).json({ error: 'User not found' });
+    const data = doc.data();
+    const claimKey = `dailyClaim_${type}`;
+    if (data[claimKey] === today) {
+      return res.status(429).json({ error: 'Already claimed today' });
+    }
+    const xpAmount = 30;
+    const newXP = (data.xp || 0) + xpAmount;
+    await userRef.update({ xp: newXP, [claimKey]: today, xpUpdatedAt: new Date().toISOString() });
+    res.json({ awarded: true, xp: xpAmount, totalXP: newXP });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.patch('/api/users/:uid/account', verifyToken, verifyOwner, async (req, res) => {
   const { uid } = req.params;
   const { displayName, username } = req.body;
@@ -3282,7 +3467,7 @@ async function enrichConversation(d, uid) {
         return { uid: pid, name: u.displayName || 'User', avatar: u.avatar || '' };
       } catch { return { uid: pid, name: 'User', avatar: '' }; }
     }));
-    return { ...base, name: data.name || 'Group Chat', participantCount: (data.participants || []).length, participantProfiles: profiles };
+    return { ...base, name: data.name || 'Group Chat', icon: data.icon || null, createdBy: data.createdBy || null, admins: data.admins || [], participantCount: (data.participants || []).length, participantProfiles: profiles };
   }
 
   // direct
@@ -3380,6 +3565,98 @@ app.post('/api/conversations', verifyToken, async (req, res) => {
       }).catch(() => {})
     ));
     res.json({ conversationId: convId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/conversations/:id/info — full group info with all member profiles
+app.get('/api/conversations/:id/info', verifyToken, async (req, res) => {
+  try {
+    const doc = await db.collection('conversations').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    const data = doc.data();
+    if (!data.participants?.includes(req.uid)) return res.status(403).json({ error: 'Forbidden' });
+    const members = await Promise.all((data.participants || []).map(async uid => {
+      try {
+        const u = (await db.collection('users').doc(uid).get()).data() || {};
+        return { uid, name: u.displayName || u.name || 'User', username: u.username || '', avatar: u.avatar || '' };
+      } catch { return { uid, name: 'User', username: '', avatar: '' }; }
+    }));
+    res.json({
+      id: doc.id, name: data.name, icon: data.icon || null,
+      createdBy: data.createdBy, admins: data.admins || [],
+      members, createdAt: data.createdAt,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/conversations/:id — update group name / icon (creator or admin only)
+app.patch('/api/conversations/:id', verifyToken, async (req, res) => {
+  try {
+    const doc = await db.collection('conversations').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    const data = doc.data();
+    const isLeader = data.createdBy === req.uid || (data.admins || []).includes(req.uid);
+    if (!isLeader) return res.status(403).json({ error: 'Only the group leader can do this' });
+    const updates = {};
+    if (req.body.name)  updates.name = sanitize(req.body.name, 60);
+    if (req.body.icon !== undefined) updates.icon = req.body.icon; // base64 or null
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'Nothing to update' });
+    await db.collection('conversations').doc(req.params.id).update(updates);
+    res.json({ ok: true, ...updates });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/conversations/:id/members/:uid/promote — make member an admin
+app.post('/api/conversations/:id/members/:uid/promote', verifyToken, async (req, res) => {
+  try {
+    const doc = await db.collection('conversations').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    const data = doc.data();
+    if (data.createdBy !== req.uid) return res.status(403).json({ error: 'Only the leader can promote members' });
+    if (!data.participants?.includes(req.params.uid)) return res.status(400).json({ error: 'Not a member' });
+    await db.collection('conversations').doc(req.params.id).update({ admins: admin.firestore.FieldValue.arrayUnion(req.params.uid) });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/conversations/:id/members/:uid/demote — remove admin role
+app.post('/api/conversations/:id/members/:uid/demote', verifyToken, async (req, res) => {
+  try {
+    const doc = await db.collection('conversations').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    if (doc.data().createdBy !== req.uid) return res.status(403).json({ error: 'Only the leader can demote members' });
+    await db.collection('conversations').doc(req.params.id).update({ admins: admin.firestore.FieldValue.arrayRemove(req.params.uid) });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/conversations/:id/members/:uid — kick member
+app.delete('/api/conversations/:id/members/:uid', verifyToken, async (req, res) => {
+  try {
+    const doc = await db.collection('conversations').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    const data = doc.data();
+    const isLeader = data.createdBy === req.uid;
+    const isAdmin  = (data.admins || []).includes(req.uid);
+    if (!isLeader && !isAdmin) return res.status(403).json({ error: 'No permission' });
+    if (req.params.uid === data.createdBy) return res.status(400).json({ error: 'Cannot kick the leader' });
+    await db.collection('conversations').doc(req.params.id).update({ participants: admin.firestore.FieldValue.arrayRemove(req.params.uid) });
+    await db.collection('users').doc(req.params.uid).update({ conversationIds: admin.firestore.FieldValue.arrayRemove(req.params.id) }).catch(() => {});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/conversations/:id/transfer — transfer leadership to another member
+app.post('/api/conversations/:id/transfer', verifyToken, async (req, res) => {
+  const { toUid } = req.body;
+  try {
+    const doc = await db.collection('conversations').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    const data = doc.data();
+    if (data.createdBy !== req.uid) return res.status(403).json({ error: 'Only the leader can transfer leadership' });
+    if (!data.participants?.includes(toUid)) return res.status(400).json({ error: 'Not a member' });
+    await db.collection('conversations').doc(req.params.id).update({ createdBy: toUid });
+    res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -3503,7 +3780,7 @@ app.post('/api/conversations/:id/messages/:msgId/react', verifyToken, async (req
 });
 
 app.post('/api/conversations/:id/messages', verifyToken, async (req, res) => {
-  const { text, image, audio } = req.body;
+  const { text, image, audio, replyToId } = req.body;
   if (!text && !image && !audio) return res.status(400).json({ error: 'text or image or audio required' });
   try {
     const convRef = db.collection('conversations').doc(req.params.id);
@@ -3534,28 +3811,146 @@ app.post('/api/conversations/:id/messages', verifyToken, async (req, res) => {
         return res.status(404).json({ error: 'Conversation not found' });
       }
     }
-    const participants  = convDoc.data().participants || [];
-    const recipientId   = participants.find(p => p !== req.uid);
-    const msgRef = await convRef.collection('messages').add({
+    const convData = convDoc.data();
+    const participants = convData.participants || [];
+    // For community convs, auto-add sender to participants if missing
+    if (convData.type === 'community' && !participants.includes(req.uid)) {
+      await convRef.update({ participants: admin.firestore.FieldValue.arrayUnion(req.uid) });
+    }
+    const recipientId  = convData.type === 'direct' ? participants.find(p => p !== req.uid) : null;
+
+    // Resolve reply-to message
+    let replyTo = null;
+    if (replyToId) {
+      try {
+        const replySnap = await convRef.collection('messages').doc(replyToId).get();
+        if (replySnap.exists) {
+          const rd = replySnap.data();
+          // Resolve sender name
+          let senderName = 'Someone';
+          try {
+            const suSnap = await db.collection('users').doc(rd.senderId).get();
+            if (suSnap.exists) senderName = suSnap.data().displayName || suSnap.data().name || 'Someone';
+          } catch {}
+          replyTo = { id: replyToId, text: rd.text || '', senderId: rd.senderId, senderName };
+        }
+      } catch {}
+    }
+
+    const msgPayload = {
       senderId: req.uid,
       text:      text ? sanitize(text, 2000) : '',
       image:     image || null,
       audio:     audio || null,
+      replyTo:   replyTo || null,
       createdAt: new Date().toISOString(),
       readBy:    [req.uid],
-    });
-    const msgData = { id: msgRef.id, senderId: req.uid, text: text ? sanitize(text, 2000) : '', image: image || null, audio: audio || null, createdAt: new Date().toISOString(), readBy: [req.uid] };
+    };
+    const msgRef  = await convRef.collection('messages').add(msgPayload);
+    const msgData = { id: msgRef.id, ...msgPayload };
     const preview = text ? sanitize(text, 60) : audio ? '🎤 Voice message' : 'Sent an image';
     const upd = { lastMessage: preview, lastMessageAt: new Date().toISOString() };
     if (recipientId) upd['unreadCounts.' + recipientId] = (convDoc.data().unreadCounts?.[recipientId] || 0) + 1;
     await convRef.update(upd);
     if (recipientId) {
       const sSnap = await db.collection('users').doc(req.uid).get();
-      const sName = sSnap.exists ? (sSnap.data().displayName || 'Someone') : 'Someone';
-      await sendPushNotification(recipientId, sName + ' sent you a message', preview, { type: 'message', convId: req.params.id });
+      const sName = sSnap.exists ? (sSnap.data().displayName || sSnap.data().name || 'Someone') : 'Someone';
+      // Write in-app notification so the recipient's poller picks it up
+      await db.collection('notifications').add({
+        userId:    recipientId,
+        type:      'new_message',
+        title:     sName,
+        message:   preview,
+        fromUid:   req.uid,
+        convId:    req.params.id,
+        isRead:    false,
+        createdAt: new Date().toISOString(),
+      }).catch(() => {});
     }
     res.json({ id: msgRef.id, message: msgData });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/conversations/:id/messages/:msgId — edit message text
+app.patch('/api/conversations/:id/messages/:msgId', verifyToken, async (req, res) => {
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'text required' });
+  try {
+    const msgRef = db.collection('conversations').doc(req.params.id)
+                     .collection('messages').doc(req.params.msgId);
+    const msgDoc = await msgRef.get();
+    if (!msgDoc.exists) return res.status(404).json({ error: 'Message not found' });
+    if (msgDoc.data().senderId !== req.uid) return res.status(403).json({ error: 'Not your message' });
+    await msgRef.update({ text: sanitize(text.trim(), 2000), editedAt: new Date().toISOString() });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/conversations/:id/messages/:msgId — delete message
+app.delete('/api/conversations/:id/messages/:msgId', verifyToken, async (req, res) => {
+  try {
+    const msgRef = db.collection('conversations').doc(req.params.id)
+                     .collection('messages').doc(req.params.msgId);
+    const msgDoc = await msgRef.get();
+    if (!msgDoc.exists) return res.status(404).json({ error: 'Message not found' });
+    if (msgDoc.data().senderId !== req.uid) return res.status(403).json({ error: 'Not your message' });
+    await msgRef.update({ text: '', image: null, audio: null, deleted: true, deletedAt: new Date().toISOString() });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/conversations/:id — hide/delete conversation for current user
+app.delete('/api/conversations/:id', verifyToken, async (req, res) => {
+  const uid = req.uid;
+  try {
+    const convRef = db.collection('conversations').doc(req.params.id);
+    const convDoc = await convRef.get();
+    if (!convDoc.exists) return res.status(404).json({ error: 'Conversation not found' });
+    const data = convDoc.data();
+    if (!data.participants?.includes(uid)) return res.status(403).json({ error: 'Not a participant' });
+    // Soft-delete: add uid to hiddenFor array so it disappears only for this user
+    await convRef.update({ hiddenFor: admin.firestore.FieldValue.arrayUnion(uid) });
+    // Remove from user's conversationIds index
+    await db.collection('users').doc(uid).update({
+      conversationIds: admin.firestore.FieldValue.arrayRemove(req.params.id),
+    }).catch(() => {});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/conversations/:id/leave — leave a group chat
+app.post('/api/conversations/:id/leave', verifyToken, async (req, res) => {
+  const uid = req.uid;
+  try {
+    const convRef = db.collection('conversations').doc(req.params.id);
+    const convDoc = await convRef.get();
+    if (!convDoc.exists) return res.status(404).json({ error: 'Conversation not found' });
+    const data = convDoc.data();
+    if (data.type !== 'group') return res.status(400).json({ error: 'Not a group chat' });
+    if (!data.participants?.includes(uid)) return res.status(403).json({ error: 'Not a participant' });
+    await convRef.update({ participants: admin.firestore.FieldValue.arrayRemove(uid) });
+    await db.collection('users').doc(uid).update({
+      conversationIds: admin.firestore.FieldValue.arrayRemove(req.params.id),
+    }).catch(() => {});
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Typing indicator ──────────────────────────────────────────────────────────
+// In-memory store: { "convId_uid": timestamp }
+const _typingStore = {};
+app.post('/api/conversations/:id/typing', verifyToken, (req, res) => {
+  _typingStore[`${req.params.id}_${req.uid}`] = Date.now();
+  res.json({ ok: true });
+});
+app.get('/api/conversations/:id/typing', verifyToken, (req, res) => {
+  const now = Date.now();
+  const prefix = req.params.id + '_';
+  const typing = Object.entries(_typingStore)
+    .filter(([k, ts]) => k.startsWith(prefix) && now - ts < 4000)
+    .map(([k]) => k.slice(prefix.length))
+    .filter(uid => uid !== req.uid);
+  res.json({ typing });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3569,25 +3964,24 @@ app.get('/api/reels', async (req, res) => {
     let docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     // Only return posts with actual video URLs — no fallback to image/text posts
     const result = docs.filter(p => p.videoUrl && typeof p.videoUrl === 'string' && p.videoUrl.trim() !== '').slice(0, limit);
-    const enriched = await Promise.all(result.map(async p => {
-      // Support both post schemas: user.id (new) and userId (old)
-      const ownerId = p.user?.id || p.userId || p.authorId || '';
-      // If the post already has a well-formed user object, use it
-      if (p.user?.name && p.user?.id) {
-        return { ...p, isLiked: false };
-      }
-      let user = { id: ownerId, name: 'User', username: '', avatar: '' };
+    // Batch-fetch all unique owner user docs so avatar/name are always fresh
+    const ownerIds = [...new Set(result.map(p => p.user?.id || p.userId || p.authorId || '').filter(Boolean))];
+    const userMap = {};
+    for (let i = 0; i < ownerIds.length; i += 10) {
+      const batch = ownerIds.slice(i, i + 10);
       try {
-        if (ownerId) {
-          const uSnap = await db.collection('users').doc(ownerId).get();
-          if (uSnap.exists) {
-            const u = uSnap.data();
-            user = { id: ownerId, name: u.displayName || u.email, username: u.username || '', avatar: u.avatar || '' };
-          }
-        }
+        const uSnap = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', batch).get();
+        uSnap.docs.forEach(d => {
+          const u = d.data();
+          userMap[d.id] = { id: d.id, name: u.displayName || u.email || 'User', username: u.username || '', avatar: u.avatar || '' };
+        });
       } catch {}
+    }
+    const enriched = result.map(p => {
+      const ownerId = p.user?.id || p.userId || p.authorId || '';
+      const user = userMap[ownerId] || { id: ownerId, name: p.user?.name || 'User', username: p.user?.username || '', avatar: p.user?.avatar || '' };
       return { ...p, user, isLiked: false };
-    }));
+    });
     res.json({ reels: enriched });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3874,7 +4268,7 @@ app.post('/api/stories', verifyToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/stories', verifyToken, async (req, res) => {
+app.get('/api/stories', async (req, res) => {
   try {
     const now = new Date().toISOString();
     const snap = await db.collection('stories').where('expiresAt', '>', now).orderBy('expiresAt').get();
@@ -4621,10 +5015,13 @@ app.post('/api/users/:uid/buddy-action', verifyToken, async (req, res) => {
 // GET /api/meals — list community meals (optional ?category=)
 app.get('/api/meals', verifyToken, async (req, res) => {
   try {
-    const { category } = req.query;
+    const { category, source } = req.query;
     let query = db.collection('meals');
     const snap = await query.get();
     let meals = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (source && source !== 'all') {
+      meals = meals.filter(m => (m.source || 'curated') === source);
+    }
     if (category && category !== 'all') {
       meals = meals.filter(m => m.category === category);
     }
@@ -4643,9 +5040,7 @@ app.post('/api/meals', verifyToken, async (req, res) => {
   try {
     const callerSnap = await db.collection('users').doc(req.uid).get();
     const caller = callerSnap.exists ? callerSnap.data() : {};
-    if (!['trainer', 'admin'].includes(caller.accountType)) {
-      return res.status(403).json({ error: 'Trainers and admins only' });
-    }
+    const isCurator = ['trainer', 'admin'].includes(caller.accountType);
     const { name, description, category, calories, protein, carbs, fat, ingredients, instructions, photo } = req.body;
     if (!name || !category) return res.status(400).json({ error: 'name and category required' });
     const ref = db.collection('meals').doc();
@@ -4661,8 +5056,9 @@ app.post('/api/meals', verifyToken, async (req, res) => {
       instructions: (instructions || '').trim(),
       photo: photo || null,
       authorId: req.uid,
-      authorName: caller.displayName || 'Trainer',
+      authorName: caller.displayName || caller.name || 'User',
       authorAvatar: caller.avatar || null,
+      source: isCurator ? 'curated' : 'community',
       saves: 0,
       createdAt: new Date().toISOString(),
     };
@@ -5001,63 +5397,35 @@ app.get('/api/stats/today', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/activity/recent — last 30 interesting events across PRs, posts, streams
+// GET /api/activity/recent — last 30 interesting events across posts & streams
 app.get('/api/activity/recent', async (req, res) => {
   try {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const events = [];
 
-    // Recent PRs
-    const prSnap = await db.collectionGroup('personalRecords')
-      .where('createdAt', '>=', since)
-      .orderBy('createdAt', 'desc')
-      .limit(15)
-      .get();
-    prSnap.forEach(d => {
-      const pr = d.data();
-      events.push({
-        id: d.id,
-        type: 'pr',
-        message: `${pr.username || pr.userId?.slice(0,6) || 'Someone'} hit a new ${pr.exercise} PR — ${pr.weight}kg × ${pr.reps}`,
-        avatar: pr.avatar || null,
-        ts: pr.createdAt,
-      });
-    });
-
-    // Recent posts
-    const postSnap = await db.collection('workouts')
-      .where('createdAt', '>=', since)
-      .orderBy('createdAt', 'desc')
-      .limit(15)
-      .get();
+    // Recent posts (simple query — no compound index needed)
+    const postSnap = await db.collection('posts').orderBy('createdAt', 'desc').limit(20).get();
     postSnap.forEach(d => {
       const p = d.data();
       events.push({
         id: d.id,
-        type: 'workout',
-        message: `${p.user?.username || p.user?.name || 'Someone'} logged ${p.workoutType || 'a workout'}`,
+        type: p.isPR ? 'pr' : 'workout',
+        message: p.isPR
+          ? `${p.user?.username || 'Someone'} hit a new Personal Record! 🏆`
+          : `${p.user?.username || 'Someone'} logged ${p.workoutType || 'a workout'}`,
         avatar: p.user?.avatar || null,
-        ts: p.createdAt || p.timestamp,
+        ts: p.createdAt || p.timestamp || '',
       });
     });
 
     // Active live streams
-    const streamSnap = await db.collection('livestreams')
-      .where('status', '==', 'live')
-      .limit(5)
-      .get();
-    streamSnap.forEach(d => {
-      const s = d.data();
-      events.push({
-        id: d.id,
-        type: 'stream',
-        message: `${s.trainerName || 'A trainer'} is streaming live — ${s.title || s.category || 'Workout'}`,
-        avatar: s.trainerAvatar || null,
-        ts: s.startedAt,
+    try {
+      const streamSnap = await db.collection('livestreams').where('status', '==', 'live').limit(5).get();
+      streamSnap.forEach(d => {
+        const s = d.data();
+        events.push({ id: d.id, type: 'stream', message: `${s.trainerName || 'A trainer'} is live — ${s.title || 'Workout'}`, avatar: s.trainerAvatar || null, ts: s.startedAt || '' });
       });
-    });
+    } catch { /* livestreams collection may not exist */ }
 
-    // Sort newest first, cap at 30
     events.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
     res.json({ events: events.slice(0, 30) });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -5518,7 +5886,7 @@ app.get('/api/communities/:id/events', verifyToken, async (req, res) => {
 // POST /api/communities/:id/events — create event
 app.post('/api/communities/:id/events', verifyToken, async (req, res) => {
   const uid = req.uid;
-  const { title, description, eventAt, location, maxAttendees } = req.body;
+  const { title, description, eventAt, location, maxAttendees, eventType, level, duration } = req.body;
   if (!title || !eventAt) return res.status(400).json({ error: 'title and eventAt required' });
   try {
     const commDoc = await db.collection('communities').doc(req.params.id).get();
@@ -5526,19 +5894,23 @@ app.post('/api/communities/:id/events', verifyToken, async (req, res) => {
     if (!commDoc.data().members?.includes(uid)) return res.status(403).json({ error: 'Join the community first' });
     const userSnap = await db.collection('users').doc(uid).get();
     const u = userSnap.exists ? userSnap.data() : {};
-    const ref = await db.collection('communities').doc(req.params.id).collection('events').add({
+    const eventData = {
       title: sanitize(title, 100),
       description: sanitize(description || '', 500),
       eventAt: String(eventAt),
       location: sanitize(location || '', 100),
       maxAttendees: Number(maxAttendees) || 0,
+      eventType: ['in-person','virtual','live'].includes(eventType) ? eventType : 'in-person',
+      level: sanitize(level || 'All levels', 30),
+      duration: Number(duration) || 60,
       creatorId: uid,
       creatorName: u.displayName || u.name || 'User',
       creatorAvatar: u.avatar || '',
       attendees: [uid],
       createdAt: new Date().toISOString(),
-    });
-    res.status(201).json({ id: ref.id });
+    };
+    const ref = await db.collection('communities').doc(req.params.id).collection('events').add(eventData);
+    res.status(201).json({ id: ref.id, ...eventData });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6914,13 +7286,14 @@ app.get('/api/challenges/active', async (req, res) => {
   try {
     const snap = await db.collection('challenges')
       .where('active', '==', true)
-      .orderBy('createdAt', 'desc')
-      .limit(1).get();
+      .limit(5).get();
     if (snap.empty) return res.json({ challenge: null });
-    const data = snap.docs[0].data();
-    res.json({ challenge: { id: snap.docs[0].id, title: data.title, description: data.description, endsAt: data.endsAt } });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    const docs = snap.docs.sort((a, b) => (b.data().createdAt || '').localeCompare(a.data().createdAt || ''));
+    const data = docs[0].data();
+    res.json({ challenge: { id: docs[0].id, title: data.title, description: data.description, endsAt: data.endsAt } });
+  } catch (_e) {
+    // challenges collection may not exist yet — return null gracefully
+    return res.json({ challenge: null });
   }
 });
 
@@ -6960,6 +7333,687 @@ app.delete('/api/challenges/active', verifyToken, async (req, res) => {
 });
 
 
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TRAIN TOGETHER — proximity sessions, chat, ratings
+// ══════════════════════════════════════════════════════════════════════════════
+
+// POST /api/train-together/location — store user's current lat/lng + gym + availability
+app.post('/api/train-together/location', verifyToken, async (req, res) => {
+  try {
+    const { lat, lng, gymId, gymName, workoutType, available } = req.body;
+    await db.collection('userLocations').doc(req.uid).set({
+      uid: req.uid,
+      lat: lat || null,
+      lng: lng || null,
+      gymId: gymId || null,
+      gymName: gymName || null,
+      workoutType: workoutType || null,
+      available: available !== false,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/train-together/location — go offline / unavailable
+app.delete('/api/train-together/location', verifyToken, async (req, res) => {
+  try {
+    await db.collection('userLocations').doc(req.uid).set({ available: false, updatedAt: new Date().toISOString() }, { merge: true });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/train-together/nearby — returns users within ~5 km or same gym
+app.get('/api/train-together/nearby', verifyToken, async (req, res) => {
+  try {
+    const { lat, lng, gymId } = req.query;
+    const myLat = parseFloat(lat) || null;
+    const myLng = parseFloat(lng) || null;
+
+    // Fetch all available locations (single-field filter avoids composite index requirement)
+    const snap = await db.collection('userLocations')
+      .where('available', '==', true)
+      .get();
+    // Filter stale (>30 min) in-memory
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const freshDocs = snap.docs.filter(d => !d.data().updatedAt || d.data().updatedAt >= cutoff);
+
+    const uids = freshDocs.map(d => d.id).filter(uid => uid !== req.uid);
+
+    // ── Demo fallback: if no one has checked in, pull real users from DB ──────
+    // This lets the feature work immediately without requiring seedTrainTogether.js
+    if (uids.length === 0) {
+      const WORKOUT_TYPES = ['Push day','Pull day','Leg day','Full body','Cardio','HIIT','Upper body'];
+      const OTHER_GYMS = ['FitLife Studio','FitLife Kadikoy','CrossFit Istanbul','Gold\'s Gym'];
+      const fallbackSnap = await db.collection('users')
+        .limit(20)
+        .get();
+
+      // Fetch the selected gym name so demo users can be placed there
+      let selectedGymName = null;
+      if (gymId) {
+        try {
+          const gymDoc = await db.collection('gyms').doc(gymId).get();
+          if (gymDoc.exists) selectedGymName = gymDoc.data().gymName || gymDoc.data().name || null;
+        } catch {}
+      }
+
+      // Deterministic hash so each user is always assigned to the same gym
+      // regardless of which gym the viewer selected — prevents users "teleporting"
+      const uidHash = (uid) => {
+        let h = 0;
+        for (const c of uid) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+        return h;
+      };
+      // ~40% of users will be at the selected gym, the rest at other gyms
+      const ALL_GYMS = selectedGymName
+        ? [selectedGymName, ...OTHER_GYMS.filter(g => g !== selectedGymName)]
+        : OTHER_GYMS;
+
+      const fallbackUsers = fallbackSnap.docs
+        .filter(d => d.id !== req.uid && d.data().accountType !== 'gym')
+        .slice(0, 8)
+        .map((doc, i) => {
+          const u = doc.data();
+          // Each user gets a stable gym based on their UID hash
+          const hash = uidHash(doc.id);
+          // ~40% chance to be at selected gym (slots 0-1 of 5-slot wheel)
+          const gymSlot = hash % 5;
+          const assignToSelected = gymId && selectedGymName && gymSlot < 2;
+          const gymName = assignToSelected
+            ? selectedGymName
+            : (u.gym || ALL_GYMS[1 + (hash % (ALL_GYMS.length - 1))]);
+          // sameGym = true if assigned to the selected gym OR if the user's own gym matches
+          const sameGym = !!(selectedGymName && gymName === selectedGymName);
+          const dist = parseFloat((0.2 + (hash % 10) * 0.25).toFixed(1));
+          return {
+            uid: doc.id,
+            name: u.name || u.displayName || u.username || 'Flex User',
+            username: u.username || '',
+            avatar: u.avatar || '',
+            gym: gymName,
+            gymId: assignToSelected ? gymId : null,
+            workoutType: WORKOUT_TYPES[hash % WORKOUT_TYPES.length],
+            distance: dist,
+            sameGym,
+            rating: u.trainTogetherRating || parseFloat((3.5 + (hash % 3) * 0.5).toFixed(1)),
+            ratingCount: u.trainTogetherRatingCount || (10 + (hash % 8) * 7),
+            inSession: false,
+            sessionId: null,
+            isDemo: true,
+          };
+        });
+      return res.json({ users: fallbackUsers });
+    }
+
+    // Fetch user profiles in batches of 10
+    const users = [];
+    for (let i = 0; i < uids.length; i += 10) {
+      const batch = uids.slice(i, i + 10);
+      const userSnap = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', batch).get();
+      for (const doc of userSnap.docs) {
+        const loc = freshDocs.find(d => d.id === doc.id)?.data();
+        const userData = doc.data();
+        let distance = null;
+        let sameGym = gymId && loc?.gymId && loc.gymId === gymId;
+
+        if (myLat && myLng && loc?.lat && loc?.lng) {
+          const R = 6371;
+          const dLat = (loc.lat - myLat) * Math.PI / 180;
+          const dLng = (loc.lng - myLng) * Math.PI / 180;
+          const a = Math.sin(dLat/2)**2 + Math.cos(myLat * Math.PI/180) * Math.cos(loc.lat * Math.PI/180) * Math.sin(dLng/2)**2;
+          distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        // Include if same gym OR within 5 km OR no location data (show all available)
+        if (sameGym || distance === null || distance <= 5) {
+          // Validate inSession — only true if the session still exists and is active/waiting
+          let inSession = false;
+          let sessionId = null;
+          if (userData.inTrainSession && userData.activeSessionId) {
+            try {
+              const sessDoc = await db.collection('trainSessions').doc(userData.activeSessionId).get();
+              if (sessDoc.exists && ['waiting','active'].includes(sessDoc.data().status)) {
+                inSession = true;
+                sessionId = userData.activeSessionId;
+              }
+            } catch {}
+          }
+          users.push({
+            uid: doc.id,
+            name: userData.displayName || userData.name || userData.username || 'Flex User',
+            username: userData.username || '',
+            avatar: userData.avatar || '',
+            gym: loc?.gymName || userData.gym || null,
+            gymId: loc?.gymId || null,
+            workoutType: loc?.workoutType || null,
+            distance: distance !== null ? Math.round(distance * 10) / 10 : null,
+            sameGym: !!sameGym,
+            rating: userData.trainTogetherRating || null,
+            ratingCount: userData.trainTogetherRatingCount || 0,
+            inSession,
+            sessionId,
+          });
+        }
+      }
+    }
+
+    users.sort((a, b) => {
+      if (a.sameGym && !b.sameGym) return -1;
+      if (!a.sameGym && b.sameGym) return 1;
+      if (a.distance !== null && b.distance !== null) return a.distance - b.distance;
+      return 0;
+    });
+
+    res.json({ users });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions — create a new session
+app.post('/api/train-together/sessions', verifyToken, async (req, res) => {
+  try {
+    const { gymId, gymName, workoutType } = req.body;
+    const userDoc = await db.collection('users').doc(req.uid).get();
+    const userData = userDoc.data() || {};
+    const sessionRef = db.collection('trainSessions').doc();
+    const session = {
+      id: sessionRef.id,
+      createdBy: req.uid,
+      creatorName: userData.name || 'User',
+      creatorAvatar: userData.avatar || '',
+      gymId: gymId || null,
+      gymName: gymName || null,
+      workoutType: workoutType || null,
+      participants: [req.uid],
+      status: 'waiting', // waiting | active | ended
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: [],
+    };
+    await sessionRef.set(session);
+    await db.collection('users').doc(req.uid).update({ inTrainSession: true, activeSessionId: sessionRef.id });
+    res.json({ session });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/invite — send invite to a user
+app.post('/api/train-together/sessions/:id/invite', verifyToken, async (req, res) => {
+  try {
+    const { targetUid } = req.body;
+    const sessionRef = db.collection('trainSessions').doc(req.params.id);
+    const sessionDoc = await sessionRef.get();
+    if (!sessionDoc.exists) return res.status(404).json({ error: 'Session not found' });
+    const senderDoc = await db.collection('users').doc(req.uid).get();
+    const sender = senderDoc.data() || {};
+
+    // Write a notification for the target user
+    await db.collection('users').doc(targetUid).collection('trainInvites').add({
+      sessionId: req.params.id,
+      fromUid: req.uid,
+      fromName: sender.name || 'Someone',
+      fromAvatar: sender.avatar || '',
+      gymName: sessionDoc.data().gymName || null,
+      workoutType: sessionDoc.data().workoutType || null,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/train-together/invites — get pending invites for current user
+app.get('/api/train-together/invites', verifyToken, async (req, res) => {
+  try {
+    const snap = await db.collection('users').doc(req.uid).collection('trainInvites')
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc')
+      .limit(10)
+      .get();
+    const invites = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ invites });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/join — accept invite & join
+app.post('/api/train-together/sessions/:id/join', verifyToken, async (req, res) => {
+  try {
+    const { inviteId } = req.body;
+    const sessionRef = db.collection('trainSessions').doc(req.params.id);
+    await sessionRef.update({
+      participants: admin.firestore.FieldValue.arrayUnion(req.uid),
+      status: 'active',
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await db.collection('users').doc(req.uid).update({ inTrainSession: true, activeSessionId: req.params.id });
+    if (inviteId) {
+      await db.collection('users').doc(req.uid).collection('trainInvites').doc(inviteId).update({ status: 'accepted' });
+    }
+    const sessionDoc = await sessionRef.get();
+    res.json({ session: { id: sessionDoc.id, ...sessionDoc.data() } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/leave — leave / end session
+app.post('/api/train-together/sessions/:id/leave', verifyToken, async (req, res) => {
+  try {
+    const sessionRef = db.collection('trainSessions').doc(req.params.id);
+    // Keep participants intact so history queries (array-contains) still work.
+    // Just mark the session ended.
+    await sessionRef.update({
+      status: 'ended',
+      endedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await db.collection('users').doc(req.uid).update({ inTrainSession: false, activeSessionId: null });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/train-together/sessions/:id — get session data
+app.get('/api/train-together/sessions/:id', verifyToken, async (req, res) => {
+  try {
+    const sessionDoc = await db.collection('trainSessions').doc(req.params.id).get();
+    if (!sessionDoc.exists) return res.status(404).json({ error: 'Not found' });
+    // Fetch participant profiles
+    const data = sessionDoc.data();
+    const profiles = [];
+    for (const uid of (data.participants || [])) {
+      const uDoc = await db.collection('users').doc(uid).get();
+      if (uDoc.exists) {
+        const u = uDoc.data();
+        profiles.push({ uid, name: u.name, avatar: u.avatar, username: u.username, rating: u.trainTogetherRating || null });
+      }
+    }
+    res.json({ session: { id: sessionDoc.id, ...data, profiles } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/train-together/sessions/:id/stream — SSE for live session updates
+app.get('/api/train-together/sessions/:id/stream', async (req, res) => {
+  const token = req.query.token;
+  let uid;
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    uid = decoded.uid;
+  } catch { return res.status(401).end(); }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+  const hb = setInterval(() => res.write(': hb\n\n'), 20000);
+
+  const unsub = db.collection('trainSessions').doc(req.params.id)
+    .onSnapshot(snap => {
+      if (!snap.exists) { send({ type: 'ended' }); return; }
+      send({ type: 'update', session: { id: snap.id, ...snap.data() } });
+    }, () => send({ type: 'error' }));
+
+  req.on('close', () => { clearInterval(hb); unsub(); });
+});
+
+// POST /api/train-together/sessions/:id/messages — send a chat message in session
+app.post('/api/train-together/sessions/:id/messages', verifyToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text?.trim()) return res.status(400).json({ error: 'text required' });
+    const userDoc = await db.collection('users').doc(req.uid).get();
+    const u = userDoc.data() || {};
+    const msg = {
+      id: db.collection('_').doc().id,
+      senderId: req.uid,
+      senderName: u.name || 'User',
+      senderAvatar: u.avatar || '',
+      text: sanitize(text.trim(), 500),
+      createdAt: new Date().toISOString(),
+      type: 'chat',
+    };
+    await db.collection('trainSessions').doc(req.params.id).update({
+      messages: admin.firestore.FieldValue.arrayUnion(msg),
+      updatedAt: new Date().toISOString(),
+    });
+    res.json({ message: msg });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/event — post a workout event (set done, etc.)
+app.post('/api/train-together/sessions/:id/event', verifyToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const event = {
+      id: db.collection('_').doc().id,
+      senderId: req.uid,
+      text: sanitize(text || '', 200),
+      createdAt: new Date().toISOString(),
+      type: 'event',
+    };
+    await db.collection('trainSessions').doc(req.params.id).update({
+      messages: admin.firestore.FieldValue.arrayUnion(event),
+      updatedAt: new Date().toISOString(),
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/rate — rate the session partner
+app.post('/api/train-together/sessions/:id/rate', verifyToken, async (req, res) => {
+  try {
+    const { targetUid, rating, note } = req.body;
+    if (!targetUid || !rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'targetUid and rating 1-5 required' });
+
+    // Save rating doc
+    await db.collection('trainRatings').add({
+      sessionId: req.params.id,
+      fromUid: req.uid,
+      targetUid,
+      rating,
+      note: note ? sanitize(note, 300) : null,
+      createdAt: new Date().toISOString(),
+    });
+
+    // Update rolling average on target user
+    const userRef = db.collection('users').doc(targetUid);
+    const userDoc = await userRef.get();
+    const userData = userDoc.data() || {};
+    const oldCount = userData.trainTogetherRatingCount || 0;
+    const oldRating = userData.trainTogetherRating || 0;
+    const newCount = oldCount + 1;
+    const newRating = Math.round(((oldRating * oldCount + rating) / newCount) * 10) / 10;
+    await userRef.update({ trainTogetherRating: newRating, trainTogetherRatingCount: newCount });
+
+    res.json({ ok: true, newRating });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/train-together/gyms — return nearby gyms from DB for gym picker
+app.get('/api/train-together/gyms', verifyToken, async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    const myLat = parseFloat(lat) || null;
+    const myLng = parseFloat(lng) || null;
+    const snap = await db.collection('gyms').limit(20).get();
+    const gyms = snap.docs.map(doc => {
+      const g = doc.data();
+      let distance = null;
+      if (myLat && myLng && g.lat && g.lng) {
+        const R = 6371;
+        const dLat = (g.lat - myLat) * Math.PI / 180;
+        const dLng = (g.lng - myLng) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(myLat * Math.PI/180) * Math.cos(g.lat * Math.PI/180) * Math.sin(dLng/2)**2;
+        distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      }
+      return { id: doc.id, name: g.name || g.gymName || 'Gym', address: g.address || '', distance: distance ? Math.round(distance * 10) / 10 : null, memberCount: g.memberCount || 0 };
+    });
+    gyms.sort((a, b) => (a.distance ?? 999) - (b.distance ?? 999));
+    res.json({ gyms: gyms.slice(0, 8) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// GET /api/train-together/following — users the current user follows, with their location/online status
+app.get('/api/train-together/following', verifyToken, async (req, res) => {
+  try {
+    const uid = req.uid;
+    // Get all follows where fromUid = current user
+    const followsSnap = await db.collection('follows')
+      .where('followerId', '==', uid)
+      .get();
+    if (followsSnap.empty) return res.json({ users: [] });
+
+    const followingIds = followsSnap.docs.map(d => d.data().targetId || d.id.split('_')[1]).filter(Boolean);
+    if (!followingIds.length) return res.json({ users: [] });
+
+    // Fetch user profiles + their current location docs in parallel
+    const chunks = [];
+    for (let i = 0; i < followingIds.length; i += 10) chunks.push(followingIds.slice(i, i + 10));
+
+    const users = [];
+    for (const chunk of chunks) {
+      const [profileSnaps, locSnaps] = await Promise.all([
+        db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get(),
+        db.collection('userLocations').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get(),
+      ]);
+      const locMap = {};
+      locSnaps.docs.forEach(d => { locMap[d.id] = d.data(); });
+
+      profileSnaps.docs.forEach(d => {
+        const p = d.data();
+        const loc = locMap[d.id] || {};
+        const updatedAt = loc.updatedAt ? new Date(loc.updatedAt) : null;
+        const isOnline = updatedAt && (Date.now() - updatedAt.getTime() < 30 * 60 * 1000); // online if updated in last 30 min
+        users.push({
+          uid: d.id,
+          name: p.name || p.displayName || 'User',
+          username: p.username || '',
+          avatar: p.avatar || p.photoURL || '',
+          gym: loc.gymName || p.gym || null,
+          gymId: loc.gymId || null,
+          workoutType: loc.workoutType || null,
+          isOnline: !!(isOnline && loc.available),
+          available: loc.available || false,
+          rating: p.rating || null,
+          ratingCount: p.ratingCount || 0,
+          inSession: loc.inSession || false,
+          sessionId: loc.sessionId || null,
+          distance: null,
+          sameGym: false,
+        });
+      });
+    }
+
+    res.json({ users });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/train-together/history — past completed sessions for current user
+app.get('/api/train-together/history', verifyToken, async (req, res) => {
+  try {
+    const uid = req.uid;
+    // Query without orderBy to avoid needing a composite index;
+    // sort in memory instead.
+    const snap = await db.collection('trainSessions')
+      .where('participants', 'array-contains', uid)
+      .where('status', '==', 'ended')
+      .limit(50)
+      .get();
+
+    // Collect all unique partner UIDs to batch-fetch profiles
+    const allPartnerUids = new Set();
+    snap.docs.forEach(d => {
+      (d.data().participants || []).forEach(p => { if (p !== uid) allPartnerUids.add(p); });
+    });
+    const profileMap = {};
+    const uidArr = [...allPartnerUids];
+    for (let i = 0; i < uidArr.length; i += 10) {
+      const chunk = uidArr.slice(i, i + 10);
+      const uSnap = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', chunk).get();
+      uSnap.docs.forEach(d => {
+        const u = d.data();
+        profileMap[d.id] = { uid: d.id, name: u.name || u.displayName || 'User', avatar: u.avatar || u.photoURL || '' };
+      });
+    }
+
+    const sessions = snap.docs.map(d => {
+      const s = d.data();
+      const durationMs = s.startedAt && s.endedAt
+        ? new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime()
+        : 0;
+      const durationMin = Math.round(durationMs / 60000);
+      const partnerUids = (s.participants || []).filter(p => p !== uid);
+      const partners = partnerUids.map(p => profileMap[p]).filter(Boolean);
+      const exerciseCount = (s.exercises || []).length;
+      return {
+        id: d.id,
+        date: s.endedAt || s.startedAt || s.createdAt,
+        gymName: s.gymName || null,
+        workoutType: s.workoutType || null,
+        durationMin,
+        partners,
+        exerciseCount,
+        myReps: (s.repCounts || {})[uid] || 0,
+      };
+    });
+
+    // Sort newest first in memory
+    sessions.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    res.json({ sessions: sessions.slice(0, 20) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/rep — log a rep for current user, broadcast via SSE
+app.post('/api/train-together/sessions/:id/rep', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('trainSessions').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Session not found' });
+    const data = doc.data();
+    const repCounts = data.repCounts || {};
+    repCounts[req.uid] = (repCounts[req.uid] || 0) + 1;
+    await ref.update({ repCounts, lastActivityAt: new Date().toISOString() });
+    res.json({ ok: true, repCounts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/hype — send hype burst to partner (ephemeral SSE event)
+app.post('/api/train-together/sessions/:id/hype', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('trainSessions').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Session not found' });
+    // Store hype event in a sub-ephemeral array so SSE picks it up
+    const data = doc.data();
+    const hypes = data.hypes || [];
+    hypes.push({ fromUid: req.uid, at: new Date().toISOString() });
+    if (hypes.length > 20) hypes.splice(0, hypes.length - 20);
+    await ref.update({ hypes });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/exercise — add/update exercise tracker
+app.post('/api/train-together/sessions/:id/exercise', verifyToken, async (req, res) => {
+  try {
+    const { name, sets, reps, weight } = req.body;
+    if (!name) return res.status(400).json({ error: 'name required' });
+    const ref = db.collection('trainSessions').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Session not found' });
+    const data = doc.data();
+    const exercises = data.exercises || [];
+    exercises.push({ id: Date.now().toString(), name, sets: sets || 4, reps: reps || 8, weight: weight || null, addedBy: req.uid, completedSets: {} });
+    await ref.update({ exercises });
+    res.json({ ok: true, exercises });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/exercise/:exId/set — check off a set
+app.post('/api/train-together/sessions/:id/exercise/:exId/set', verifyToken, async (req, res) => {
+  try {
+    const { setNum } = req.body;
+    const ref = db.collection('trainSessions').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    const data = doc.data();
+    const exercises = (data.exercises || []).map(ex => {
+      if (ex.id !== req.params.exId) return ex;
+      const completedSets = ex.completedSets || {};
+      if (!completedSets[req.uid]) completedSets[req.uid] = [];
+      if (!completedSets[req.uid].includes(setNum)) completedSets[req.uid].push(setNum);
+      return { ...ex, completedSets };
+    });
+    await ref.update({ exercises });
+    res.json({ ok: true, exercises });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/sessions/:id/prophecy — submit pre-session prediction
+app.post('/api/train-together/sessions/:id/prophecy', verifyToken, async (req, res) => {
+  try {
+    const { mySets, partnerSets, durationMin, partnerMaxKg } = req.body;
+    const ref = db.collection('trainSessions').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Not found' });
+    const prophecy = (doc.data().prophecy) || {};
+    prophecy[req.uid] = { mySets, partnerSets, durationMin, partnerMaxKg, submittedAt: new Date().toISOString() };
+    await ref.update({ prophecy });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/pacts — create a pact
+app.post('/api/train-together/pacts', verifyToken, async (req, res) => {
+  try {
+    const { partnerUid, title, terms, xpStake, deadlineDate, sessionsRequired, minMinutes } = req.body;
+    if (!partnerUid || !title) return res.status(400).json({ error: 'partnerUid and title required' });
+    const meDoc = await db.collection('users').doc(req.uid).get();
+    const meData = meDoc.data() || {};
+    const pact = {
+      createdBy: req.uid,
+      creatorName: meData.name || meData.displayName || 'User',
+      partnerUid,
+      title: sanitize(title, 100),
+      terms: sanitize(terms || '', 300),
+      xpStake: Math.min(xpStake || 100, 500),
+      deadlineDate: deadlineDate || null,
+      sessionsRequired: sessionsRequired || 3,
+      minMinutes: minMinutes || 30,
+      status: 'pending',
+      signedBy: [req.uid],
+      sessionsCompleted: [],
+      createdAt: new Date().toISOString(),
+    };
+    const ref = await db.collection('pacts').add(pact);
+    res.json({ ok: true, pactId: ref.id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/train-together/pacts — get my pacts (as creator or partner)
+app.get('/api/train-together/pacts', verifyToken, async (req, res) => {
+  try {
+    const [asCreator, asPartner] = await Promise.all([
+      db.collection('pacts').where('createdBy', '==', req.uid).get(),
+      db.collection('pacts').where('partnerUid', '==', req.uid).get(),
+    ]);
+    const all = {};
+    [...asCreator.docs, ...asPartner.docs].forEach(d => { all[d.id] = { id: d.id, ...d.data() }; });
+    const pacts = Object.values(all).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    res.json({ pacts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/pacts/:id/sign — partner signs the pact
+app.post('/api/train-together/pacts/:id/sign', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('pacts').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Pact not found' });
+    const data = doc.data();
+    if (data.partnerUid !== req.uid && data.createdBy !== req.uid) return res.status(403).json({ error: 'Not your pact' });
+    const signedBy = [...(data.signedBy || [])];
+    if (!signedBy.includes(req.uid)) signedBy.push(req.uid);
+    const bothSigned = signedBy.includes(data.createdBy) && signedBy.includes(data.partnerUid);
+    await ref.update({ signedBy, status: bothSigned ? 'active' : 'pending' });
+    res.json({ ok: true, status: bothSigned ? 'active' : 'pending' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/pacts/:id/decline — decline a pact
+app.post('/api/train-together/pacts/:id/decline', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('pacts').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Pact not found' });
+    await ref.update({ status: 'declined', declinedBy: req.uid, declinedAt: new Date().toISOString() });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── KEEP-ALIVE — prevents Render free tier from sleeping ─────────────────────
 // Pings itself every 10 minutes so cold-start delay doesn't hit users
 const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
@@ -6975,39 +8029,11 @@ setInterval(async () => {
 app.get('/api/admin/health', verifyToken, async (req, res) => {
   try {
     const userSnap = await db.collection('users').get();
-    const now = new Date();    const todayStr = now.toDateString();
-    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-
-    let newToday = 0;
-    let activeRecently = 0;
-    userSnap.forEach(doc => {
-      const d = doc.data();
-      if (d.createdAt && new Date(d.createdAt).toDateString() === todayStr) newToday++;
-      if (d.lastActive && d.lastActive > oneDayAgo) activeRecently++;
-      else if (d.workingOut) activeRecently++;
-    });
-
-    res.json({ ok: true, newToday, activeRecently, ts: now.toISOString() });
-  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
-
-// POST /api/posts/:id/report — any authenticated user can report a post
-app.post('/api/posts/:id/report', verifyToken, async (req, res) => {
-  try {
-    const { reason = 'No reason given' } = req.body;
-    const postRef = db.collection('posts').doc(req.params.id);
-    const postDoc = await postRef.get();
-    if (!postDoc.exists) return res.status(404).json({ error: 'Post not found' });
-
-    await db.collection('reportedPosts').add({
-      postId: req.params.id,
-      reportedBy: req.uid,
-      reason: String(reason).slice(0, 300),
-      postData: postDoc.data(),
-      createdAt: new Date().toISOString(),
-      status: 'pending',
-    });
-
-    res.json({ success: true });
+    const users = userSnap.docs.map(d => d.data());
+    const today = new Date(); today.setHours(0,0,0,0);
+    const signupsToday = users.filter(u => u.createdAt && new Date(u.createdAt) >= today).length;
+    const recentlyActive = users.filter(u => u.lastSeen && (Date.now() - new Date(u.lastSeen).getTime()) < 15 * 60 * 1000).length;
+    res.json({ ok: true, totalUsers: users.length, signupsToday, recentlyActive });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
