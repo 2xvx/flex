@@ -5444,6 +5444,25 @@ app.patch('/api/users/:uid/workout-status', verifyToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Missing routes that frontend calls ───────────────────────────────────────
+// Track post views (frontend calls this when a post enters viewport)
+app.post('/api/posts/:id/view', async (req, res) => {
+  try {
+    await db.collection('posts').doc(req.params.id).update({
+      views: admin.firestore.FieldValue.increment(1),
+    });
+    res.json({ ok: true });
+  } catch { res.json({ ok: true }); } // silently ignore if post doesn't exist
+});
+
+// ── Crash guard — prevent unhandled rejections from killing the process ──────
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection (ignored):', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception (ignored):', err.message);
+});
+
 app.listen(PORT, () => console.log(`Flex API running on port ${PORT}`));
 
 
