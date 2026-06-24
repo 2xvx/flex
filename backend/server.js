@@ -5123,7 +5123,7 @@ function broadcastToStream(streamId, data) {
 // GET /api/livestreams — all active streams
 app.get('/api/livestreams', async (req, res) => {
   try {
-    const snap = await db.collection('livestreams').where('status', '==', 'live').orderBy('startedAt', 'desc').get();
+    const snap = await db.collection('livestreams').where('status', '==', 'live').get();
     res.json({ streams: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -5881,8 +5881,7 @@ app.get('/api/communities/:id/feed', verifyToken, async (req, res) => {
     for (const chunk of chunks) {
       const snap = await db.collection('posts')
         .where('user.id', 'in', chunk)
-        .orderBy('createdAt', 'desc')
-        .limit(50)
+        .limit(100)
         .get();
       snap.docs.forEach(d => allPosts.push({ id: d.id, ...d.data() }));
     }
@@ -5975,7 +5974,7 @@ app.get('/api/accountability/my-pair', verifyToken, async (req, res) => {
         const p = pSnap.data();
         pair.partner = { uid: partnerId, name: p.displayName || p.name || 'User', avatar: p.avatar || '', username: p.username || '', fitnessGoal: p.fitnessGoal || '' };
         // Last workout
-        const wSnap = await db.collection('posts').where('user.id', '==', partnerId).orderBy('createdAt', 'desc').limit(1).get();
+        const wSnap = await db.collection('posts').where('user.id', '==', partnerId).limit(10).get();
         pair.partner.lastWorkout = wSnap.empty ? null : (wSnap.docs[0].data().createdAt || null);
       }
     }
@@ -6590,7 +6589,7 @@ app.get('/api/gyms/:id/stats', verifyToken, async (req, res) => {
     // Check-ins this week (last 7 days)
     const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
     const checkinsWeek = await db.collection('gyms').doc(gymId).collection('checkins')
-      .where('checkedInAt', '>=', weekAgo.toISOString()).orderBy('checkedInAt').get();
+      .where('checkedInAt', '>=', weekAgo.toISOString()).get();
 
     // Build daily check-in counts for chart
     const dailyCounts = {};
@@ -7587,10 +7586,12 @@ app.get('/api/train-together/invites', verifyToken, async (req, res) => {
   try {
     const snap = await db.collection('users').doc(req.uid).collection('trainInvites')
       .where('status', '==', 'pending')
-      .orderBy('createdAt', 'desc')
-      .limit(10)
+      .limit(20)
       .get();
-    const invites = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const invites = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
     res.json({ invites });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -8022,37 +8023,4 @@ app.post('/api/train-together/pacts/:id/sign', verifyToken, async (req, res) => 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/train-together/pacts/:id/decline — decline a pact
-app.post('/api/train-together/pacts/:id/decline', verifyToken, async (req, res) => {
-  try {
-    const ref = db.collection('pacts').doc(req.params.id);
-    const doc = await ref.get();
-    if (!doc.exists) return res.status(404).json({ error: 'Pact not found' });
-    await ref.update({ status: 'declined', declinedBy: req.uid, declinedAt: new Date().toISOString() });
-    res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── KEEP-ALIVE — prevents Render free tier from sleeping ─────────────────────
-// Pings itself every 10 minutes so cold-start delay doesn't hit users
-const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
-setInterval(async () => {
-  try {
-    const http = require('http'), https = require('https');
-    const mod = SELF_URL.startsWith('https') ? https : http;
-    mod.get(`${SELF_URL}/api/health`, () => {}).on('error', () => {});
-  } catch {}
-}, 10 * 60 * 1000); // every 10 minutes
-
-// GET /api/admin/health — API status + signups today + active recently
-app.get('/api/admin/health', verifyToken, async (req, res) => {
-  try {
-    const userSnap = await db.collection('users').get();
-    const users = userSnap.docs.map(d => d.data());
-    const today = new Date(); today.setHours(0,0,0,0);
-    const signupsToday = users.filter(u => u.createdAt && new Date(u.createdAt) >= today).length;
-    const recentlyActive = users.filter(u => u.lastSeen && (Date.now() - new Date(u.lastSeen).getTime()) < 15 * 60 * 1000).length;
-    res.json({ ok: true, totalUsers: users.length, signupsToday, recentlyActive });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
+// POST /api/train-together/
