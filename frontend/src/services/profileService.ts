@@ -26,6 +26,10 @@ export const updateProfile = async (uid: string, data: {
   gym?: string;
   isPrivate?: boolean;
   gender?: string;
+  displayName?: string;
+  instagram?: string;
+  twitter?: string;
+  usernameChangedAt?: string;
 }) => {
   const res = await authFetch(`${API}/users/${uid}/profile`, {
     method: 'PATCH',

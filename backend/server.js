@@ -1217,7 +1217,6 @@ app.get('/api/challenges/mine', verifyToken, async (req, res) => {
   try {
     const snap = await db.collection('challenges')
       .where('participants', 'array-contains', uid)
-      .orderBy('createdAt', 'desc')
       .limit(20)
       .get();
     const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -2478,7 +2477,7 @@ app.get('/api/trainer/notes', verifyToken, async (req, res) => {
   try {
     let q = db.collection('sessionNotes').where('trainerId', '==', req.uid);
     if (clientId) q = q.where('clientId', '==', String(clientId));
-    const snap = await q.orderBy('createdAt', 'desc').limit(50).get();
+    const snap = await q.limit(50).get();
     res.json({ notes: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3994,8 +3993,12 @@ app.get('/api/progress/:uid', verifyToken, async (req, res) => {
   try {
     const snap = await db.collection('progressPhotos')
       .where('userId','==', req.params.uid)
-      .orderBy('createdAt','desc').limit(30).get();
-    res.json({ photos: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+      .limit(50).get();
+    const photos = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 30);
+    res.json({ photos });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4623,7 +4626,7 @@ app.get('/api/exercises', async (req, res) => {
     let query = db.collection('exercises');
     if (category)   query = query.where('category', '==', category);
     if (difficulty) query = query.where('difficulty', '==', difficulty);
-    const snap = await query.orderBy('createdAt', 'desc').limit(50).get();
+    const snap = await query.limit(50).get();
     let exercises = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     // Text search client-side (Firestore free tier has no full-text)
     if (q) {
@@ -5343,7 +5346,7 @@ app.get('/api/users/:uid/integrations/health-data', verifyToken, verifyOwner, as
     const { type, from, to } = req.query;
     let query = db.collection('users').doc(req.params.uid).collection('healthData');
     if (type) query = query.where('type', '==', type);
-    const snap = await query.orderBy('date', 'desc').limit(100).get();
+    const snap = await query.limit(100).get();
     res.json({ data: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -5750,8 +5753,7 @@ app.get('/api/users/:uid/trainer/clients', verifyToken, verifyOwner, async (req,
     const clients = await Promise.all(clientIds.map(async clientId => {
       const [userSnap, workoutsSnap] = await Promise.all([
         db.collection('users').doc(clientId).get(),
-        db.collection('posts').where('user.id', '==', clientId)
-          .orderBy('createdAt', 'desc').limit(5).get().catch(() => ({ size: 0, docs: [] })),
+        db.collection('posts').where('user.id', '==', clientId).limit(5).get().catch(() => ({ size: 0, docs: [] })),
       ]);
       if (!userSnap.exists) return null;
       const u = userSnap.data();
@@ -8019,8 +8021,4 @@ app.post('/api/train-together/pacts/:id/sign', verifyToken, async (req, res) => 
     if (!signedBy.includes(req.uid)) signedBy.push(req.uid);
     const bothSigned = signedBy.includes(data.createdBy) && signedBy.includes(data.partnerUid);
     await ref.update({ signedBy, status: bothSigned ? 'active' : 'pending' });
-    res.json({ ok: true, status: bothSigned ? 'active' : 'pending' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// POST /api/train-together/
+    res.json({ ok: true, status: bothSigned ? 'active' : 'p

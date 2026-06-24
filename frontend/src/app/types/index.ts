@@ -31,7 +31,9 @@ export interface Booking {
 
 export interface User {
   id: string;
+  uid?: string;
   name: string;
+  displayName?: string;
   username: string;
   email?: string;
   avatar: string;

@@ -29,6 +29,7 @@ import { followUser, unfollowUser, getFollowingList } from '../../services/follo
 import { compressFile } from '../../utils/imageCompression';
 import { authFetch, authHeaders } from '../../utils/authToken';
 import { toast } from 'sonner';
+import { getUserXP } from '../../services/xpService';
 import { BodyStatsTracker } from './BodyStatsTracker';
 import { BodyMeasurementsPage } from './BodyMeasurementsPage';
 import { TrainerAnalytics } from './TrainerAnalytics';
@@ -37,6 +38,29 @@ import { EmptyState } from './EmptyState';
 import { WorkoutCard } from './WorkoutCard';
 import { AnimatedNumber } from './ui/AnimatedNumber';
 import { ProfileHeaderSkeleton } from './ui/skeleton';
+
+
+// ── Rank helpers (mirrors sidebar / WeeklyChallengePage) ─────────────────────
+const PROFILE_RANK_TIERS = [
+  { name: 'Wood',     minXP: 0,    icon: '🪵', color: '#a16207', glow: '#a1620720' },
+  { name: 'Stone',    minXP: 200,  icon: '🪨', color: '#9ca3af', glow: '#9ca3af20' },
+  { name: 'Iron',     minXP: 500,  icon: '⚙️', color: '#94a3b8', glow: '#94a3b820' },
+  { name: 'Bronze',   minXP: 1000, icon: '🥉', color: '#cd7f32', glow: '#cd7f3220' },
+  { name: 'Gold',     minXP: 2000, icon: '🥇', color: '#e8c98a', glow: '#e8c98a20' },
+  { name: 'Diamond',  minXP: 4000, icon: '💎', color: '#67e8f9', glow: '#67e8f920' },
+  { name: 'Obsidian', minXP: 8000, icon: '🖤', color: '#a78bfa', glow: '#a78bfa20' },
+];
+function getProfileRank(xp: number) {
+  let tier = PROFILE_RANK_TIERS[0];
+  for (const t of PROFILE_RANK_TIERS) { if (xp >= t.minXP) tier = t; }
+  return tier;
+}
+function readLocalXP(): number {
+  try {
+    const d = JSON.parse(localStorage.getItem('flex_xp_data') || '{"events":[]}');
+    return (d.events || []).reduce((s: number, e: { amount: number }) => s + e.amount, 0);
+  } catch { return 0; }
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1044,9 +1068,10 @@ interface ProfilePageProps {
   viewingUserId: string;
   onViewProfile?: (uid: string) => void;
   onViewFollowers?: (uid: string, tab: 'followers' | 'following') => void;
+  onCurrentUserUpdate?: (updates: Partial<User>) => void;
 }
 
-export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewFollowers, onNavigate }: ProfilePageProps) {
+export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewFollowers, onNavigate, onCurrentUserUpdate }: ProfilePageProps) {
   const [profile, setProfile]               = useState<any>(null);
   const [bookings, setBookings]             = useState<Booking[]>([]);
   const [clientBookings, setClientBookings] = useState<Booking[]>([]);
@@ -1064,19 +1089,32 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
   const [isFollowing, setIsFollowing]       = useState(false);
   const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [postsHidden, setPostsHidden]       = useState(false);
+  const [postsViewMode, setPostsViewMode]    = useState<'list'|'grid'>('list');
   const [followLoading, setFollowLoading]   = useState(false);
   const [editLevel, setEditLevel]           = useState('');
   const [editGym, setEditGym]               = useState('');
+  const [gymList, setGymList]               = useState<{id:string;name:string}[]>([]);
+  const [gymSearch, setGymSearch]           = useState('');
+  const [showGymDrop, setShowGymDrop]       = useState(false);
   const [editGender, setEditGender]         = useState('');
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editInstagram, setEditInstagram]   = useState('');
+  const [editTwitter, setEditTwitter]       = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<'idle'|'checking'|'available'|'taken'|'cooldown'|'same'>('idle');
+  const usernameTimerRef                    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [savingProfile, setSavingProfile]   = useState(false);
   const [avatarPreview, setAvatarPreview]   = useState<string | null>(null);
   const [avatarSaving, setAvatarSaving]     = useState(false);
   const avatarInputRef                      = useRef<HTMLInputElement>(null);
+  const [coverPreview, setCoverPreview]     = useState<string | null>(null);
+  const [coverSaving, setCoverSaving]       = useState(false);
+  const coverInputRef                       = useRef<HTMLInputElement>(null);
   const [highlights, setHighlights]         = useState<any[]>([]);
   const [showHighlightViewer, setShowHighlightViewer] = useState<{highlight: any, idx: number} | null>(null);
   const [showCreateHighlight, setShowCreateHighlight] = useState(false);
   const [newHLName, setNewHLName]           = useState('');
   const [creatingHL, setCreatingHL]         = useState(false);
+  const [profileXP, setProfileXP]           = useState(0);
 
   // ── New profile features ────────────────────────────────────────────────────
   const [pinnedPRs, setPinnedPRs]           = useState<{exercise: string; value: string; unit: string}[]>([]);
@@ -1095,6 +1133,12 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
 
   const load = useCallback(async () => {
     setLoading(true);
+    // Fetch XP from backend for the profile being viewed
+    getUserXP(viewingUserId).then(d => {
+      setProfileXP(d.totalXP);
+      // Broadcast so LeftSidebar syncs immediately when viewing own profile
+      window.dispatchEvent(new CustomEvent('xp-updated', { detail: { totalXP: d.totalXP } }));
+    }).catch(() => {});
     try {
       const data = await getProfile(viewingUserId, currentUser?.id);
       setProfile(data);
@@ -1103,8 +1147,15 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
       setEditGoal(data.fitnessGoal ?? '');
       setEditLevel(data.fitnessLevel ?? '');
       setEditGym(data.gym ?? '');
+      setGymSearch(data.gym ?? '');
+      // Fetch gym list from DB
+      authFetch(`${API}/train-together/gyms`).then(r => r.json()).then(d => setGymList(d.gyms || [])).catch(() => {});
       setEditGender(data.gender ?? '');
       setEditIsPrivate(data.isPrivate ?? false);
+      setEditDisplayName(data.displayName ?? data.name ?? '');
+      setEditInstagram(data.instagram ?? '');
+      setEditTwitter(data.twitter ?? '');
+      setUsernameStatus('idle');
       setPostsHidden(data.postsHidden ?? false);
       setHasPendingRequest(data.hasPendingRequest ?? false);
       setPinnedPRs(data.pinnedPRs || []);
@@ -1151,6 +1202,17 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
   }, [viewingUserId, currentUser?.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Keep rank in sync when XP is earned anywhere in the app
+  useEffect(() => {
+    if (!isOwnProfile) return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.totalXP != null) setProfileXP(detail.totalXP);
+    };
+    window.addEventListener('xp-updated', handler);
+    return () => window.removeEventListener('xp-updated', handler);
+  }, [isOwnProfile]);
 
   // Load story highlights whenever viewingUserId changes
   useEffect(() => {
@@ -1221,6 +1283,7 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
       if (!res.ok) throw new Error('Failed');
       // Update the shown avatar immediately
       setProfile((p: any) => ({ ...p, avatar: avatarPreview }));
+      onCurrentUserUpdate?.({ avatar: avatarPreview });
       setAvatarPreview(null);
       toast.success('Profile photo updated!');
     } catch {
@@ -1230,22 +1293,70 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
     }
   };
 
+  const handleCoverFile = async (file: File) => {
+    try {
+      const compressed = await compressFile(file, 1200, 0.85);
+      setCoverPreview(compressed);
+      // Auto-save immediately
+      if (!currentUser) return;
+      setCoverSaving(true);
+      const res = await authFetch(`${API}/users/${currentUser.id}/profile`, {
+        method: 'PATCH',
+        body: JSON.stringify({ coverPhoto: compressed }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setProfile((p: any) => ({ ...p, coverPhoto: compressed }));
+      toast.success('Cover photo updated!');
+    } catch { toast.error('Could not save cover'); }
+    finally { setCoverSaving(false); }
+  };
+
+  const checkUsername = (val: string) => {
+    const clean = val.trim().replace(/^@/, '').toLowerCase();
+    if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current);
+    if (!clean || clean === profile.username) { setUsernameStatus('same'); return; }
+    if (clean.length < 3) { setUsernameStatus('idle'); return; }
+    // 7-day cooldown check
+    const changedAt = profile.usernameChangedAt;
+    if (changedAt) {
+      const daysSince = (Date.now() - new Date(changedAt).getTime()) / 86400000;
+      if (daysSince < 7) { setUsernameStatus('cooldown'); return; }
+    }
+    setUsernameStatus('checking');
+    usernameTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API}/resolve-username/${encodeURIComponent(clean)}`);
+        setUsernameStatus(res.ok ? 'taken' : 'available');
+      } catch { setUsernameStatus('available'); }
+    }, 600);
+  };
+
   const handleSaveProfile = async () => {
     if (!currentUser) return;
+    if (usernameStatus === 'taken') { toast.error('That username is already taken'); return; }
+    if (usernameStatus === 'cooldown') { toast.error('You can only change your username once every 7 days'); return; }
+    if (usernameStatus === 'checking') { toast.error('Still checking username…'); return; }
     setSavingProfile(true);
     const cleanUsername = editUsername.trim().replace(/^@/, '').toLowerCase();
-    if (cleanUsername && (cleanUsername.length < 3 || cleanUsername.length > 20)) {
-      toast.error('Username must be 3–20 characters'); return;
+    if (cleanUsername && cleanUsername !== profile.username && (cleanUsername.length < 3 || cleanUsername.length > 20)) {
+      toast.error('Username must be 3–20 characters'); setSavingProfile(false); return;
     }
+    const isNewUsername = cleanUsername && cleanUsername !== profile.username;
     try {
       await updateProfile(currentUser.id, {
-        bio: editBio, fitnessGoal: editGoal,
-        fitnessLevel: editLevel, gym: editGym, isPrivate: editIsPrivate,
-        gender: editGender,
-        ...(cleanUsername ? { username: cleanUsername } : {}),
+        bio: editBio, fitnessGoal: editGoal, fitnessLevel: editLevel,
+        gym: editGym, isPrivate: editIsPrivate, gender: editGender,
+        displayName: editDisplayName.trim() || undefined,
+        instagram: editInstagram.trim() || undefined,
+        twitter: editTwitter.trim().replace(/^@/, '') || undefined,
+        ...(isNewUsername ? { username: cleanUsername, usernameChangedAt: new Date().toISOString() } : {}),
       });
-      setProfile((p: any) => ({ ...p, bio: editBio, fitnessGoal: editGoal, fitnessLevel: editLevel, gym: editGym, gender: editGender, isPrivate: editIsPrivate, ...(cleanUsername ? { username: cleanUsername } : {}) }));
-      if (cleanUsername) setEditUsername(cleanUsername);
+      const updates: any = { bio: editBio, fitnessGoal: editGoal, fitnessLevel: editLevel, gym: editGym, gender: editGender, isPrivate: editIsPrivate, instagram: editInstagram, twitter: editTwitter };
+      if (editDisplayName.trim()) updates.displayName = editDisplayName.trim();
+      if (isNewUsername) { updates.username = cleanUsername; updates.usernameChangedAt = new Date().toISOString(); }
+      setProfile((p: any) => ({ ...p, ...updates }));
+      if (isNewUsername) setEditUsername(cleanUsername);
+      onCurrentUserUpdate?.({ name: editDisplayName.trim() || currentUser.name, ...(isNewUsername ? { username: cleanUsername } : {}) });
       toast.success('Profile updated!');
       setShowEditProfile(false);
     } catch (err: any) {
@@ -1317,38 +1428,63 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
     <div className="max-w-2xl mx-auto py-6 px-4 space-y-5">
 
       {/* ── Profile Header ── */}
-      <div className="bg-[#080608] border border-[rgba(201,169,110,0.08)] rounded-2xl overflow-hidden">
-        {/* Cover gradient */}
-        <div className="h-24 bg-gradient-to-br from-[#0d0b08] via-[#080608] to-[#080608]" />
+      <div className="bg-[#080608] border border-[rgba(201,169,110,0.08)] rounded-2xl">
+        {/* Cover — rank-aware gradient + real photo */}
+        {(() => {
+          const xp   = profileXP;
+          const rank = getProfileRank(xp);
+          const coverSrc = coverPreview || (profile as any).coverPhoto || null;
+          return (
+            <div className="h-36 relative overflow-hidden rounded-t-2xl">
+              {/* Gradient base */}
+              <div className="absolute inset-0" style={{
+                background: isOwnProfile
+                  ? 'linear-gradient(135deg, ' + rank.color + '55 0%, ' + rank.color + '11 60%, #080608 100%)'
+                  : 'linear-gradient(135deg, rgba(201,169,110,0.15) 0%, #0d0b08 55%, #080608 100%)',
+              }} />
+              <div className="absolute inset-0 opacity-30" style={{
+                backgroundImage: 'radial-gradient(circle at 75% 35%, ' + (isOwnProfile ? rank.color : '#c9a96e') + '40 0%, transparent 60%)',
+              }} />
+              {/* Real cover photo */}
+              {coverSrc && <img src={coverSrc} alt="Cover" className="absolute inset-0 w-full h-full object-cover" />}
+              {coverSrc && <div className="absolute inset-0 bg-black/25" />}
+              {/* Cover upload button */}
+              {isOwnProfile && (
+                <>
+                  <button type="button" onClick={() => coverInputRef.current?.click()}
+                    disabled={coverSaving}
+                    className="absolute top-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm border border-white/10 text-white/60 text-xs hover:text-white hover:bg-black/70 transition-all">
+                    <Camera className="w-3 h-3" />
+                    <span>{coverSaving ? 'Saving…' : 'Cover'}</span>
+                  </button>
+                  <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleCoverFile(f); e.target.value = ''; }} />
+                </>
+              )}
+            </div>
+          );
+        })()}
 
-        <div className="px-5 pb-5 -mt-10">
-          <div className="flex items-end justify-between mb-3">
+        <div className="px-5 pb-5">
+          {/* Avatar row — negative margin pulls avatar up over the cover */}
+          <div className="flex items-end justify-between -mt-10 mb-3">
             {/* Avatar */}
             <div className="relative shrink-0">
-              <div className="w-20 h-20 rounded-2xl border-4 border-[#080608] overflow-hidden">
+              <div className="w-20 h-20 rounded-2xl border-4 border-[#080608] overflow-hidden bg-[#080608]">
                 {(avatarPreview || profile.avatar)
                   ? <img src={avatarPreview || profile.avatar} alt={profile.displayName} className="w-full h-full object-cover" />
                   : <div className="w-full h-full bg-[#c9a96e] flex items-center justify-center text-white text-xl font-bold">{initials}</div>
                 }
               </div>
-              {/* Camera button — only on own profile */}
               {isOwnProfile && (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => avatarInputRef.current?.click()}
-                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#c9a96e] border-2 border-[#080608] flex items-center justify-center hover:bg-[#c9a96e] transition-colors"
-                    title="Change profile photo"
-                  >
+                  <button type="button" onClick={() => avatarInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#c9a96e] border-2 border-[#080608] flex items-center justify-center hover:opacity-80 transition-all"
+                    title="Change profile photo">
                     <Camera className="w-3.5 h-3.5 text-white" />
                   </button>
-                  <input
-                    ref={avatarInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }}
-                  />
+                  <input ref={avatarInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = ''; }} />
                 </>
               )}
             </div>
@@ -1414,8 +1550,19 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
           )}
 
           {/* Name + badge */}
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h1 className="text-white font-semibold text-lg">{profile.displayName || profile.name}</h1>
+            {(() => {
+              const xp   = profileXP;
+              const rank = getProfileRank(xp);
+              return (
+                <span title={rank.name + ' — ' + xp + ' XP'} style={{ background: rank.color + '18', border: '0.5px solid ' + rank.color + '50' }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold shrink-0 cursor-default">
+                  <span>{rank.icon}</span>
+                  <span style={{ color: rank.color }}>{rank.name}</span>
+                </span>
+              );
+            })()}
             {isTrainer && (
               <BadgeCheck className="w-5 h-5 text-[#c9a96e] shrink-0" />
             )}
@@ -1445,82 +1592,157 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
 
           {/* Edit profile form */}
           {showEditProfile && isOwnProfile && (
-            <div className="bg-[rgba(201,169,110,0.04)] rounded-xl p-4 mb-3 space-y-3">
-              <div>
-                <label className="text-white/40 text-xs mb-1 block">Username</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">@</span>
-                  <input
-                    value={editUsername}
-                    onChange={e => setEditUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
-                    placeholder="your_handle"
-                    maxLength={20}
-                    className="w-full bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] rounded-lg pl-7 pr-3 py-1.5 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-[rgba(201,169,110,0.5)]"
-                  />
+            <div className="bg-[rgba(201,169,110,0.03)] border border-[rgba(201,169,110,0.08)] rounded-xl p-4 mb-3 space-y-3">
+
+              {/* Name + Username row */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-white/35 text-[10px] uppercase tracking-wider mb-1.5 block">Display name</label>
+                  <input value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)} maxLength={40}
+                    placeholder="Your name"
+                    className="w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-[rgba(201,169,110,0.4)]" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-white/35 text-[10px] uppercase tracking-wider">Username</label>
+                    {usernameStatus === 'cooldown' && (() => {
+                      const changedAt = profile.usernameChangedAt ? new Date(profile.usernameChangedAt) : null;
+                      const daysLeft = changedAt ? Math.ceil(7 - (Date.now() - changedAt.getTime()) / 86400000) : 7;
+                      return <span className="text-[10px] text-amber-400/80">{daysLeft}d cooldown</span>;
+                    })()}
+                    {usernameStatus === 'checking' && <span className="text-[10px] text-white/40">checking…</span>}
+                    {usernameStatus === 'available' && <span className="text-[10px] text-green-400">✓ available</span>}
+                    {usernameStatus === 'taken' && <span className="text-[10px] text-red-400">✗ taken</span>}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/25 text-sm">@</span>
+                    <input
+                      value={editUsername}
+                      onChange={e => {
+                        const v = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+                        setEditUsername(v);
+                        checkUsername(v);
+                      }}
+                      placeholder="handle"
+                      maxLength={20}
+                      disabled={usernameStatus === 'cooldown'}
+                      className={'w-full bg-[rgba(255,255,255,0.04)] border rounded-lg pl-7 pr-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none transition-colors '
+                        + (usernameStatus === 'taken' ? 'border-red-500/40' : usernameStatus === 'available' ? 'border-green-500/40' : usernameStatus === 'cooldown' ? 'border-white/05 opacity-40 cursor-not-allowed' : 'border-[rgba(255,255,255,0.08)] focus:border-[rgba(201,169,110,0.4)]')}
+                    />
+                  </div>
                 </div>
               </div>
+
+              {/* Bio */}
               <div>
-                <label className="text-white/40 text-xs mb-1 block">Bio</label>
-                <textarea
-                  value={editBio}
-                  onChange={e => setEditBio(e.target.value)}
-                  rows={2}
-                  className="w-full bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 resize-none focus:outline-none focus:border-[rgba(201,169,110,0.5)]"
-                />
+                <label className="text-white/35 text-[10px] uppercase tracking-wider mb-1.5 block">Bio</label>
+                <textarea value={editBio} onChange={e => setEditBio(e.target.value)} rows={2} maxLength={200}
+                  placeholder="Tell people about yourself…"
+                  className="w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 resize-none focus:outline-none focus:border-[rgba(201,169,110,0.4)]" />
               </div>
+
+              {/* Goal + Level + Gym */}
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="text-white/40 text-xs mb-1 block">Goal</label>
-                  <input value={editGoal} onChange={e => setEditGoal(e.target.value)}
-                    className="w-full bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[rgba(201,169,110,0.5)]" />
-                </div>
-                <div>
-                  <label className="text-white/40 text-xs mb-1 block">Level</label>
-                  <select value={editLevel} onChange={e => setEditLevel(e.target.value)}
-                    className="w-full bg-[#0d0b08] border border-[rgba(201,169,110,0.12)] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[rgba(201,169,110,0.5)]">
-                    {['Beginner','Intermediate','Advanced','Expert'].map(l => <option key={l}>{l}</option>)}
+                  <label className="text-white/35 text-[10px] uppercase tracking-wider mb-1.5 block">Goal</label>
+                  <select value={editGoal} onChange={e => setEditGoal(e.target.value)}
+                    className="w-full bg-[#0d0b08] border border-[rgba(255,255,255,0.08)] rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-[rgba(201,169,110,0.4)]">
+                    {['Build Muscle','Lose Weight','Stay Fit','Improve Endurance','Flexibility'].map(g => <option key={g}>{g}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="text-white/40 text-xs mb-1 block">Gym</label>
-                  <input value={editGym} onChange={e => setEditGym(e.target.value)}
-                    className="w-full bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[rgba(201,169,110,0.5)]" />
+                  <label className="text-white/35 text-[10px] uppercase tracking-wider mb-1.5 block">Level</label>
+                  <select value={editLevel} onChange={e => setEditLevel(e.target.value)}
+                    className="w-full bg-[#0d0b08] border border-[rgba(255,255,255,0.08)] rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-[rgba(201,169,110,0.4)]">
+                    {['Beginner','Intermediate','Advanced','Expert'].map(l => <option key={l}>{l}</option>)}
+                  </select>
+                </div>
+                <div className="relative">
+                  <label className="text-white/35 text-[10px] uppercase tracking-wider mb-1.5 block">Gym</label>
+                  <input
+                    value={gymSearch}
+                    onChange={e => { setGymSearch(e.target.value); setEditGym(e.target.value); setShowGymDrop(true); }}
+                    onFocus={() => setShowGymDrop(true)}
+                    onBlur={() => setTimeout(() => setShowGymDrop(false), 150)}
+                    placeholder="Search gym…"
+                    className="w-full bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-lg px-2 py-2 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-[rgba(201,169,110,0.4)]"
+                  />
+                  {showGymDrop && gymList.length > 0 && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-[#111011] border border-white/[0.08] rounded-lg overflow-hidden max-h-36 overflow-y-auto">
+                      {gymList
+                        .filter(g => g.name.toLowerCase().includes(gymSearch.toLowerCase()))
+                        .map(g => (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onMouseDown={() => { setEditGym(g.name); setGymSearch(g.name); setShowGymDrop(false); }}
+                            className="w-full text-left px-3 py-2 text-xs text-white/80 hover:bg-white/[0.06] border-b border-white/[0.04] last:border-0"
+                          >
+                            {g.name}
+                          </button>
+                        ))
+                      }
+                      {gymList.filter(g => g.name.toLowerCase().includes(gymSearch.toLowerCase())).length === 0 && (
+                        <p className="px-3 py-2 text-xs text-white/30">No gyms found</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Social links */}
               <div>
-                <label className="text-white/40 text-xs mb-1 block">Gender</label>
-                <select value={editGender} onChange={e => setEditGender(e.target.value)}
-                  className="w-full bg-[#0d0b08] border border-[rgba(201,169,110,0.12)] rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[rgba(201,169,110,0.5)]">
-                  <option value="">Prefer not to say</option>
-                  <option value="male">Male ♂</option>
-                  <option value="female">Female ♀</option>
-                  <option value="non-binary">Non-binary ⚧</option>
-                </select>
-              </div>
-              {/* Privacy toggle */}
-              <div className="flex items-center justify-between py-1">
-                <div className="flex items-center gap-2">
-                  <Lock className="w-3.5 h-3.5 text-white/40" />
-                  <div>
-                    <p className="text-white/80 text-sm">Private account</p>
-                    <p className="text-white/30 text-xs">Only approved followers see your posts</p>
+                <label className="text-white/35 text-[10px] uppercase tracking-wider mb-1.5 block">Social links</label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-lg px-3 py-2">
+                    <span className="text-[#e1306c] text-sm shrink-0">IG</span>
+                    <input value={editInstagram} onChange={e => setEditInstagram(e.target.value.replace(/^@/, ''))} placeholder="instagram_username"
+                      className="flex-1 bg-transparent text-sm text-white placeholder:text-white/20 focus:outline-none" />
+                  </div>
+                  <div className="flex items-center gap-2 bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-lg px-3 py-2">
+                    <span className="text-white/60 text-sm shrink-0 font-bold">𝕏</span>
+                    <input value={editTwitter} onChange={e => setEditTwitter(e.target.value.replace(/^@/, ''))} placeholder="x_handle"
+                      className="flex-1 bg-transparent text-sm text-white placeholder:text-white/20 focus:outline-none" />
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setEditIsPrivate(v => !v)}
-                  className={`relative w-10 h-5 rounded-full transition-all ${editIsPrivate ? 'bg-[#c9a96e]' : 'bg-white/10'}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-all ${editIsPrivate ? 'translate-x-5' : ''}`} />
+              </div>
+
+              {/* Privacy + Gender row */}
+              <div className="grid grid-cols-2 gap-2 items-center">
+                <div>
+                  <label className="text-white/35 text-[10px] uppercase tracking-wider mb-1.5 block">Gender</label>
+                  <select value={editGender} onChange={e => setEditGender(e.target.value)}
+                    className="w-full bg-[#0d0b08] border border-[rgba(255,255,255,0.08)] rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-[rgba(201,169,110,0.4)]">
+                    <option value="">Prefer not to say</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="non-binary">Non-binary</option>
+                  </select>
+                </div>
+                <div className="flex items-center justify-between bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-lg px-3 py-2 mt-4">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5 text-white/40" />
+                    <span className="text-white/70 text-xs">Private</span>
+                  </div>
+                  <button type="button" onClick={() => setEditIsPrivate(v => !v)}
+                    className={'relative w-9 h-5 rounded-full transition-all ' + (editIsPrivate ? 'bg-[#c9a96e]' : 'bg-white/10')}>
+                    <span className={'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-all ' + (editIsPrivate ? 'translate-x-4' : '')} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setShowEditProfile(false)}
+                  className="flex-1 py-2 rounded-lg border border-[rgba(255,255,255,0.08)] text-white/50 text-sm hover:text-white/70 transition-all">
+                  Cancel
+                </button>
+                <button disabled={savingProfile || usernameStatus === 'taken' || usernameStatus === 'checking'}
+                  onClick={handleSaveProfile}
+                  className="flex-1 py-2 rounded-lg bg-[#c9a96e] text-[#0d0b08] text-sm font-medium disabled:opacity-50 transition-all">
+                  {savingProfile ? 'Saving…' : 'Save changes'}
                 </button>
               </div>
-              <button
-                disabled={savingProfile}
-                onClick={handleSaveProfile}
-                className="w-full py-2 rounded-lg bg-[#c9a96e] text-white text-sm font-medium hover:bg-[#c9a96e] transition-all disabled:opacity-60"
-              >
-                {savingProfile ? 'Saving…' : 'Save changes'}
-              </button>
             </div>
           )}
 
@@ -1547,6 +1769,31 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
               </span>
             )}
           </div>
+
+          {/* ── XP Rank Progress (own profile) ── */}
+          {isOwnProfile && (() => {
+            const xp    = profileXP;
+            const rank  = getProfileRank(xp);
+            const idx   = PROFILE_RANK_TIERS.indexOf(rank);
+            const isMax = idx === PROFILE_RANK_TIERS.length - 1;
+            const next  = isMax ? null : PROFILE_RANK_TIERS[idx + 1];
+            const pct   = isMax ? 100 : Math.round(((xp - rank.minXP) / (next!.minXP - rank.minXP)) * 100);
+            return (
+              <div className="mb-4 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-center gap-3">
+                <span className="text-xl shrink-0">{rank.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-bold" style={{ color: rank.color }}>{rank.name}</p>
+                    <p className="text-white/30 text-[10px]">{xp.toLocaleString()} XP{next ? ' · ' + (next.minXP - xp).toLocaleString() + ' to ' + next.name : ' · Max rank'}</p>
+                  </div>
+                  <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700"
+                      style={{ width: pct + '%', background: 'linear-gradient(90deg, ' + rank.color + ', ' + (next?.color ?? rank.color) + ')' }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── Story Highlights Row ── */}
           {(highlights.length > 0 || isOwnProfile) && (
@@ -1583,8 +1830,8 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: 'Posts',     value: posts.length,            tab: null },
-              { label: 'Followers', value: profile.followers ?? 0,  tab: 'followers' as const },
-              { label: 'Following', value: profile.following ?? 0,  tab: 'following' as const },
+              { label: 'Followers', value: Math.max(0, profile.followers ?? 0),  tab: 'followers' as const },
+              { label: 'Following', value: Math.max(0, profile.following ?? 0),  tab: 'following' as const },
             ].map(({ label, value, tab }) => (
               <button
                 key={label}
@@ -1936,6 +2183,22 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
       {/* ── Posts Grid ── */}
       {!postsHidden && activeTab === 'posts' && (
         <div>
+          {/* View toggle */}
+          {posts.length > 0 && (
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-white/30 text-xs">{posts.length} post{posts.length !== 1 ? 's' : ''}</p>
+              <div className="flex gap-1 bg-white/[0.04] p-0.5 rounded-lg border border-white/[0.06]">
+                <button onClick={() => setPostsViewMode('list')}
+                  className={'px-2.5 py-1 rounded-md text-xs font-medium transition-all ' + (postsViewMode === 'list' ? 'bg-[#c9a96e] text-white' : 'text-white/40 hover:text-white/70')}>
+                  ☰ List
+                </button>
+                <button onClick={() => setPostsViewMode('grid')}
+                  className={'px-2.5 py-1 rounded-md text-xs font-medium transition-all ' + (postsViewMode === 'grid' ? 'bg-[#c9a96e] text-white' : 'text-white/40 hover:text-white/70')}>
+                  ⊞ Grid
+                </button>
+              </div>
+            </div>
+          )}
           {posts.length === 0 ? (
             <div className="text-center py-16">
               <div className="w-14 h-14 rounded-2xl bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] flex items-center justify-center mx-auto mb-4">
@@ -1944,6 +2207,28 @@ export function ProfilePage({ currentUser, viewingUserId, onViewProfile, onViewF
               <p className="text-white/40 text-sm">
                 {isOwnProfile ? "You haven't posted any workouts yet." : 'No posts yet.'}
               </p>
+            </div>
+          ) : postsViewMode === 'grid' ? (
+            <div className="grid grid-cols-3 gap-1.5">
+              {posts.map((post: WorkoutPost) => {
+                const img = (post as any).image || (post as any).mediaUrl || (post as any).images?.[0];
+                return (
+                  <div key={post.id} className="aspect-square rounded-xl overflow-hidden bg-[rgba(201,169,110,0.04)] border border-white/[0.06] relative group cursor-pointer">
+                    {img
+                      ? <img src={img} alt="" className="w-full h-full object-cover" />
+                      : (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                          <Dumbbell className="w-5 h-5 text-white/20" />
+                          <p className="text-white/25 text-[10px] text-center px-2 truncate w-full">{(post as any).exercise || 'Workout'}</p>
+                        </div>
+                      )
+                    }
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                      <p className="text-white text-xs font-medium text-center px-2 line-clamp-2">{(post as any).exercise || (post as any).caption || 'Workout'}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="space-y-3">

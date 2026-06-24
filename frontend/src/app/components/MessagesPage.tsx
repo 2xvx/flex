@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Send, ArrowLeft, Loader2, ImagePlus, X, UserPlus, Check, CheckCheck,
   XCircle, Search, Users, Plus, MessageSquare, MessageCircle, Mic, MicOff, StopCircle, Radio,
-  Pin, PinOff, BellOff, Bell, Dumbbell, Trophy, Zap,
+  Pin, PinOff, BellOff, Bell, Dumbbell, Trophy, Zap, Pencil, Trash2, LogOut,
 } from 'lucide-react';
 import { User } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -39,17 +39,35 @@ interface Conversation {
   // group only
   participantCount?: number;
   participantProfiles?: ParticipantProfile[];
+  icon?: string | null;
+  createdBy?: string | null;
+  admins?: string[];
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
   participants?: string[];
 }
 
+interface GroupInfo {
+  id: string; name: string; icon: string | null;
+  createdBy: string; admins: string[];
+  members: { uid: string; name: string; username: string; avatar: string }[];
+  createdAt: string;
+}
+
 interface Message {
   id: string; senderId: string; text: string; audio?: string;
   image?: string; createdAt: string; readBy: string[];
-  reactions?: Record<string, string[]>; // emoji → [uid, ...]
+  reactions?: Record<string, string[]>;
+  replyTo?: { id: string; text: string; senderId: string; senderName?: string };
+  editedAt?: string; deleted?: boolean;
   _changeType?: 'added' | 'modified';
+}
+
+interface MessageGroup {
+  senderId: string;
+  messages: Message[];
+  firstTime: string;
 }
 
 interface SearchUser {
@@ -114,6 +132,8 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
   const [imagePreview, setImagePreview]         = useState<string | null>(null);
   const [sending, setSending]                   = useState(false);
   const [mobileShowThread, setMobileShowThread] = useState(false);
+  const [msgSearch, setMsgSearch]               = useState('');
+  const [showMsgSearch, setShowMsgSearch]       = useState(false);
   // Follow requests
   const [followRequests, setFollowRequests]     = useState<FollowRequest[]>([]);
   const [reqActionId, setReqActionId]           = useState<string | null>(null);
@@ -136,12 +156,101 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
   const [pinnedConvs, setPinnedConvs]           = useState<Set<string>>(new Set());
   const [mutedConvs, setMutedConvs]             = useState<Set<string>>(new Set());
   const [contextMenuConv, setContextMenuConv]   = useState<string | null>(null);
+  const [contextMenuPos,  setContextMenuPos]    = useState<{x:number;y:number}>({x:0,y:0});
+  const [showGroupInfo,   setShowGroupInfo]     = useState(false);
+  const [groupInfo,       setGroupInfo]         = useState<GroupInfo | null>(null);
+  const [groupInfoLoading,setGroupInfoLoading]  = useState(false);
+
+  const handleConvContextMenu = (e: React.MouseEvent, convId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenuPos({ x: e.clientX, y: e.clientY });
+    setContextMenuConv(convId);
+  };
+
+  const handleDeleteConv = async (convId: string) => {
+    setContextMenuConv(null);
+    try {
+      await authFetch(`${API}/conversations/${convId}`, { method: 'DELETE' });
+      setConversations(cs => cs.filter(c => c.id !== convId));
+      if (activeConvId === convId) setActiveConvId(null);
+      toast.success('Chat deleted');
+    } catch { toast.error('Failed to delete chat'); }
+  };
+
+  const handleLeaveGroup = async (convId: string) => {
+    setContextMenuConv(null);
+    try {
+      await authFetch(`${API}/conversations/${convId}/leave`, { method: 'POST' });
+      setConversations(cs => cs.filter(c => c.id !== convId));
+      if (activeConvId === convId) setActiveConvId(null);
+      toast.success('Left group');
+    } catch { toast.error('Failed to leave group'); }
+  };
+
+  const openGroupInfo = async (convId: string) => {
+    setShowGroupInfo(true);
+    setGroupInfoLoading(true);
+    try {
+      const res = await authFetch(`${API}/conversations/${convId}/info`);
+      const data = await res.json();
+      setGroupInfo(data);
+    } catch { toast.error('Failed to load group info'); }
+    finally { setGroupInfoLoading(false); }
+  };
+
+  const [memberActionUid, setMemberActionUid] = useState<string | null>(null);
+
+  const groupAction = async (action: 'promote'|'demote'|'kick'|'transfer', targetUid: string) => {
+    if (!groupInfo) return;
+    setMemberActionUid(null);
+    try {
+      let res: Response;
+      if (action === 'transfer') {
+        res = await authFetch(`${API}/conversations/${groupInfo.id}/transfer`, { method: 'POST', body: JSON.stringify({ toUid: targetUid }) });
+      } else if (action === 'kick') {
+        res = await authFetch(`${API}/conversations/${groupInfo.id}/members/${targetUid}`, { method: 'DELETE' });
+      } else {
+        res = await authFetch(`${API}/conversations/${groupInfo.id}/members/${targetUid}/${action}`, { method: 'POST' });
+      }
+      if (!res.ok) { const d = await res.json(); toast.error(d.error || 'Failed'); return; }
+      // Refresh group info
+      const updated = await authFetch(`${API}/conversations/${groupInfo.id}/info`);
+      setGroupInfo(await updated.json());
+      const labels = { promote: 'Promoted to Admin', demote: 'Removed admin role', kick: 'Member removed', transfer: 'Leadership transferred' };
+      toast.success(labels[action]);
+      if (action === 'kick') setConversations(cs => cs.map(c => c.id === groupInfo.id ? { ...c, participantCount: (c.participantCount || 1) - 1 } : c));
+    } catch { toast.error('Action failed'); }
+  };
+
+  const handleGroupIconChange = async (convId: string, file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target?.result as string;
+      try {
+        const res = await authFetch(`${API}/conversations/${convId}`, {
+          method: 'PATCH', body: JSON.stringify({ icon: base64 }),
+        });
+        if (!res.ok) { toast.error('Failed to update icon'); return; }
+        setGroupInfo(g => g ? { ...g, icon: base64 } : g);
+        setConversations(cs => cs.map(c => c.id === convId ? { ...c, icon: base64 } : c));
+        toast.success('Group icon updated');
+      } catch { toast.error('Failed to update icon'); }
+    };
+    reader.readAsDataURL(file);
+  };
   // Option C: workout attachment picker
   const [showWorkoutPick, setShowWorkoutPick]   = useState(false);
 
   // Emoji reactions
   const [hoveredMsgId, setHoveredMsgId]         = useState<string | null>(null);
   const hoverTimeoutRef                          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Reply + typing
+  const [replyTo, setReplyTo]                   = useState<Message | null>(null);
+  const [editingMsgId, setEditingMsgId]         = useState<string | null>(null);
+  const [editText, setEditText]                 = useState('');
+  const [typingUsers, setTypingUsers]            = useState<string[]>([]);
+  const typingClearRef                           = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Voice messages
   const [recording, setRecording]               = useState(false);
@@ -158,6 +267,7 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
   const fileRef        = useRef<HTMLInputElement>(null);
   const pollRef        = useRef<ReturnType<typeof setInterval> | null>(null);
   const sseRef         = useRef<EventSource | null>(null);
+  const activeConvRef  = useRef<string | null>(null); // tracks which conv messages belong to
 
   // ── Load conversations ────────────────────────────────────────────────────
   const loadConversations = useCallback(async () => {
@@ -170,7 +280,21 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
         throw new Error(err.error || `Server error ${res.status}`);
       }
       const data = await res.json();
-      setConversations(data.conversations || []);
+      // Deduplicate: for DMs keep only the latest conversation per other user
+      const raw: Conversation[] = data.conversations || [];
+      const seen = new Map<string, Conversation>();
+      for (const c of raw) {
+        // Key: otherUser uid if available, else name for direct, else conv id
+        const key = c.type === 'direct'
+          ? (c.otherUser?.uid || c.name || c.id)
+          : c.id;
+        const existing = seen.get(key);
+        if (!existing) { seen.set(key, c); continue; }
+        const ta = existing.lastMessageAt ? new Date(existing.lastMessageAt).getTime() : 0;
+        const tb = c.lastMessageAt ? new Date(c.lastMessageAt).getTime() : 0;
+        if (tb > ta) seen.set(key, c);
+      }
+      setConversations(Array.from(seen.values()));
     } catch (e: any) {
       console.error('[Messages] loadConversations failed:', e.message);
       toast.error('Failed to load conversations');
@@ -208,7 +332,7 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
               const u = await res.json();
               return {
                 uid: u.uid || uid,
-                name: u.displayName || u.name || 'User',
+                name: u.name || u.name || 'User',
                 username: u.username || '',
                 avatar: u.avatar || '',
                 accountType: u.accountType || 'user',
@@ -230,9 +354,10 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
     try {
       const res  = await authFetch(`${API}/conversations/${convId}/messages`);
       const data = await res.json();
+      // Guard: if the user switched conversations while fetch was in flight, discard result
+      if (activeConvRef.current !== convId) return;
       setMessages(prev => {
         const next = data.messages || [];
-        // Only update if something actually changed (avoids pointless re-renders)
         if (prev.length === next.length && prev[prev.length-1]?.id === next[next.length-1]?.id) return prev;
         return next;
       });
@@ -245,13 +370,24 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
 
   useEffect(() => {
     if (!activeConvId) return;
+    // Use a local flag so async callbacks can detect stale conv
+    let active = true;
 
-    // Initial load (marks messages as read)
-    loadMessages(activeConvId, true);
-
-    // Close any previous SSE / poll before opening a new one
-    if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+    // ① Kill old connections, null out handlers so onerror can't restart polls
+    if (sseRef.current) {
+      sseRef.current.onmessage = null;
+      sseRef.current.onerror = null;
+      sseRef.current.close();
+      sseRef.current = null;
+    }
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+
+    // ② Register this conv as the current one, then clear messages
+    activeConvRef.current = activeConvId;
+    setMessages([]);
+
+    // ③ Load new conversation's messages
+    loadMessages(activeConvId, true);
 
     const token = getAuthToken();
     if (token) {
@@ -260,40 +396,38 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
       sseRef.current = sse;
 
       sse.onmessage = (e) => {
+        if (!active) return;
         try {
           const msg: Message = JSON.parse(e.data);
           const changeType = msg._changeType || 'added';
           setMessages(prev => {
-            if (changeType === 'modified') {
-              // Reaction update — replace in-place
-              return prev.map(m => m.id === msg.id ? { ...m, reactions: msg.reactions } : m);
-            }
-            // New message — ignore if already present (initial snapshot burst dedup)
+            if (changeType === 'modified') return prev.map(m => m.id === msg.id ? { ...m, reactions: msg.reactions } : m);
             if (prev.some(m => m.id === msg.id)) return prev;
             return [...prev, msg];
           });
           if (changeType === 'added') {
-            // Auto-mark read when new message arrives in the open conversation
             authFetch(`${API}/conversations/${activeConvId}/read`, { method: 'POST' }).catch(() => {});
           }
         } catch {}
       };
 
       sse.onerror = () => {
-        // SSE failed (proxy cut connection, etc.) — fall back to polling
+        if (!active) return;
+        sse.onmessage = null;
+        sse.onerror = null;
         sse.close();
         sseRef.current = null;
         if (!pollRef.current) {
-          pollRef.current = setInterval(() => loadMessages(activeConvId, false, true), 8000);
+          pollRef.current = setInterval(() => { if (active) loadMessages(activeConvId, false, true); }, 2000);
         }
       };
     } else {
-      // No token yet — fall back to polling
-      pollRef.current = setInterval(() => loadMessages(activeConvId, false, true), 8000);
+      pollRef.current = setInterval(() => { if (active) loadMessages(activeConvId, false, true); }, 2000);
     }
 
     return () => {
-      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+      active = false;
+      if (sseRef.current) { sseRef.current.onmessage = null; sseRef.current.onerror = null; sseRef.current.close(); sseRef.current = null; }
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     };
   }, [activeConvId, loadMessages]);
@@ -314,8 +448,8 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
     if (justSwitchedConv) {
       activeConvIdRef.current = activeConvId;
       lastMsgIdRef.current = lastMsg.id;
-      // Use a tiny delay so the DOM renders messages before we scroll
-      setTimeout(() => scrollToBottom(false), 0);
+      // Use RAF so DOM renders messages before we scroll (avoids flash)
+      requestAnimationFrame(() => scrollToBottom(false));
     } else if (lastMsg.id !== lastMsgIdRef.current) {
       lastMsgIdRef.current = lastMsg.id;
       scrollToBottom(true);
@@ -347,7 +481,13 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
         const q   = groupSearch.trim().replace(/^@/, '');
         const res = await fetch(`${API}/search?q=${encodeURIComponent(q)}&type=users`);
         const d   = await res.json();
-        setGroupResults((d.users || []).filter((u: SearchUser) => u.uid !== currentUser?.id));
+        const sq = groupSearch.trim().replace(/^@/, '').toLowerCase();
+        setGroupResults(
+          (d.users || []).filter((u: SearchUser) =>
+            u.uid !== currentUser?.id &&
+            (u.name?.toLowerCase().includes(sq) || u.username?.toLowerCase().includes(sq))
+          )
+        );
       } catch {}
       finally { setGroupResultsLoading(false); }
     }, 300);
@@ -548,18 +688,42 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
   };
 
   // ── Send message ──────────────────────────────────────────────────────────
+  const editMessage = async (msgId: string, newText: string) => {
+    if (!activeConvId || !newText.trim()) return;
+    setEditingMsgId(null);
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, text: newText.trim() } : m));
+    try {
+      await authFetch(`${API}/conversations/${activeConvId}/messages/${msgId}`, {
+        method: 'PATCH', body: JSON.stringify({ text: newText.trim() }),
+      });
+    } catch { toast.error('Failed to edit message'); }
+  };
+
+  const deleteMessage = async (msgId: string) => {
+    if (!activeConvId) return;
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, deleted: true, text: '' } : m));
+    try {
+      await authFetch(`${API}/conversations/${activeConvId}/messages/${msgId}`, { method: 'DELETE' });
+    } catch { toast.error('Failed to delete message'); }
+  };
+
   const handleSend = async () => {
     if ((!text.trim() && !imageData) || !activeConvId) return;
     const outgoingText = text.trim();
+    const replyToId = replyTo?.id;
     setText('');
     setImageData(null); setImagePreview(null);
+    setReplyTo(null);
     setSending(true);
     try {
       const res = await authFetch(`${API}/conversations/${activeConvId}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ text: outgoingText, image: imageData }),
+        body: JSON.stringify({ text: outgoingText, image: imageData, replyToId }),
       });
-      if (!res.ok) throw new Error('Send failed');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
       // If SSE is active it will deliver the message; otherwise fall back to a silent reload
       if (!sseRef.current || sseRef.current.readyState === EventSource.CLOSED) {
         await loadMessages(activeConvId, false, true);
@@ -585,6 +749,47 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
     reader.readAsDataURL(file);
     e.target.value = '';
   };
+
+  // ── Message groups (Discord-style: consecutive same-sender within 5 min) ─────
+  const messageGroups = useMemo<MessageGroup[]>(() => {
+    const groups: MessageGroup[] = [];
+    for (const msg of messages) {
+      const last = groups[groups.length - 1];
+      const sameSender = last?.senderId === msg.senderId;
+      const prevTime = last ? new Date(last.messages[last.messages.length - 1].createdAt).getTime() : 0;
+      const diff = new Date(msg.createdAt).getTime() - prevTime;
+      if (sameSender && diff < 5 * 60 * 1000) {
+        last.messages.push(msg);
+      } else {
+        groups.push({ senderId: msg.senderId, messages: [msg], firstTime: msg.createdAt });
+      }
+    }
+    return groups;
+  }, [messages]);
+
+  // ── Typing notification ────────────────────────────────────────────────────
+  const sendTyping = useCallback(() => {
+    if (!activeConvId) return;
+    authFetch(`${API}/conversations/${activeConvId}/typing`, { method: 'POST' }).catch(() => {});
+  }, [activeConvId]);
+
+  // Poll for typing indicator every 3s while a conversation is open
+  useEffect(() => {
+    if (!activeConvId) { setTypingUsers([]); return; }
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await authFetch(`${API}/conversations/${activeConvId}/typing`);
+        if (!cancelled && res.ok) {
+          const d = await res.json();
+          setTypingUsers(d.typing || []);
+        }
+      } catch {}
+    };
+    poll();
+    const t = setInterval(poll, 3000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [activeConvId]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const activeConv = conversations.find(c => c.id === activeConvId);
@@ -620,390 +825,386 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
   }
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-full flex overflow-hidden">
 
-      {/* ── Left sidebar ────────────────────────────────────────────────── */}
-      <div className={`w-full md:w-80 lg:w-72 shrink-0 border-r border-[rgba(201,169,110,0.08)] flex flex-col bg-[#0d0b08]
+      {/* ── Left sidebar — compact icon strip ─────────────────────────── */}
+      <div className={`w-[68px] shrink-0 flex flex-col items-center py-3 gap-2 bg-[#070507] border-r border-white/[0.05]
         ${mobileShowThread ? 'hidden md:flex' : 'flex'}`}>
 
-        {/* Header */}
-        <div className="px-4 pt-4 pb-3 border-b border-[rgba(201,169,110,0.08)] space-y-3">
-          <div className="flex items-center justify-between">
-            <h1 className="text-white font-bold text-lg">Messages</h1>
-            <div className="flex items-center gap-1.5">
-              {followRequests.length > 0 && (
-                <span className="w-5 h-5 rounded-full bg-[#c9a96e] text-white text-[10px] font-bold flex items-center justify-center">
-                  {followRequests.length}
-                </span>
-              )}
-              {/* New group button */}
-              <button
-                type="button"
-                onClick={() => setShowNewGroup(true)}
-                className="w-8 h-8 rounded-lg bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] flex items-center justify-center text-white/50 hover:text-[#e8c98a] hover:border-[rgba(201,169,110,0.25)] hover:bg-[rgba(201,169,110,0.08)] transition-all"
-                title="New group chat"
-              >
-                <Users className="w-3.5 h-3.5" />
-              </button>
-            </div>
+        {/* Conversations as avatar circles */}
+        {loadingConvs ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-4 h-4 text-[#c9a96e] animate-spin" />
           </div>
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search or start new chat…"
-              className="w-full bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-[rgba(201,169,110,0.5)]"
-            />
-            {search && (
-              <button type="button" onClick={() => { setSearch(''); setSearchUsers([]); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
-
-          {/* ── Follow Requests ──────────────────────────────────────────── */}
-          {followRequests.length > 0 && (
-            <div className="border-b border-[rgba(201,169,110,0.08)] pb-1">
-              <p className="px-4 pt-3 pb-1.5 text-[#e8c98a] text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5">
-                <UserPlus className="w-3 h-3" /> Follow Requests ({followRequests.length})
-              </p>
-              {followRequests.map(req => (
-                <div key={req.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-[rgba(201,169,110,0.03)] transition-colors">
-                  <Avatar className="w-9 h-9 shrink-0">
-                    <AvatarImage src={req.fromUser.avatar} />
-                    <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-sm font-semibold">
-                      {req.fromUser.name?.[0] || '?'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{req.fromUser.name}</p>
-                    <p className="text-white/40 text-xs">@{req.fromUser.username}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button type="button" disabled={reqActionId === req.id} onClick={() => handleAccept(req)}
-                      className="w-7 h-7 rounded-lg bg-[#c9a96e] flex items-center justify-center text-white hover:bg-[#c9a96e] disabled:opacity-50 transition-all" title="Accept">
-                      {reqActionId === req.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    </button>
-                    <button type="button" disabled={reqActionId === req.id} onClick={() => handleDecline(req)}
-                      className="w-7 h-7 rounded-lg bg-[rgba(201,169,110,0.06)] flex items-center justify-center text-white/50 hover:bg-red-500/20 hover:text-red-400 disabled:opacity-50 transition-all" title="Decline">
-                      <XCircle className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── Following suggestions (shown when search bar is empty/focused) */}
-          {search.trim().length === 0 && suggestionsToShow.length > 0 && (
-            <div className="border-b border-[rgba(201,169,110,0.08)]">
-              <p className="px-4 pt-3 pb-1.5 text-white/30 text-[10px] font-semibold uppercase tracking-wider">People you follow</p>
-              {suggestionsToShow.slice(0, 6).map(u => (
-                <button key={u.uid} type="button" onClick={() => startDM(u.uid)}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[rgba(201,169,110,0.04)] transition-colors text-left">
-                  <Avatar className="w-9 h-9 shrink-0">
-                    <AvatarImage src={u.avatar} />
-                    <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-sm font-semibold">{u.name?.[0] || '?'}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{u.name}</p>
-                    <p className="text-white/40 text-xs">@{u.username}</p>
-                  </div>
-                  <MessageSquare className="w-3.5 h-3.5 text-[#c9a96e]/60 shrink-0" />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* ── New user results from search ─────────────────────────────── */}
-          {search.trim().length >= 2 && (
-            <div className="border-b border-[rgba(201,169,110,0.08)]">
-              {searchLoading ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 text-[#c9a96e] animate-spin" /></div>
-              ) : newSearchUsers.length > 0 && (
-                <>
-                  <p className="px-4 pt-3 pb-1.5 text-white/30 text-[10px] font-semibold uppercase tracking-wider">New conversation</p>
-                  {newSearchUsers.map(u => (
-                    <button key={u.uid} type="button" onClick={() => startDM(u.uid)}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[rgba(201,169,110,0.04)] transition-colors text-left">
-                      <Avatar className="w-9 h-9 shrink-0">
-                        <AvatarImage src={u.avatar} />
-                        <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-sm font-semibold">{u.name?.[0] || '?'}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-medium truncate">{u.name}</p>
-                        <p className="text-white/40 text-xs">@{u.username}</p>
-                      </div>
-                      <Plus className="w-4 h-4 text-[#c9a96e] shrink-0" />
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* ── Conversations list ────────────────────────────────────────── */}
-          {loadingConvs ? (
-            <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 text-[#c9a96e] animate-spin" /></div>
-          ) : sortedFilteredConvs.length === 0 && followRequests.length === 0 ? (
-            <div className="pt-8 px-4">
-              <EmptyState icon="message" title="No conversations yet" sub="Search for someone above or wait for a follow request." />
-            </div>
-          ) : (
-            sortedFilteredConvs.map(conv => {
-              const isGroup   = conv.type === 'group' || conv.type === 'community';
-              const avatarSrc = isGroup ? undefined : conv.otherUser?.avatar;
-              const initials  = (conv.name || '?')[0]?.toUpperCase() || '?';
-              const isPinned  = pinnedConvs.has(conv.id);
-              const isMuted   = mutedConvs.has(conv.id);
-              const showCtx   = contextMenuConv === conv.id;
+        ) : (
+          <div className="flex flex-col items-center gap-2 w-full px-2 flex-1">
+            {sortedFilteredConvs.map(conv => {
+              const isActive = activeConvId === conv.id;
+              const isCommunity = conv.type === 'community';
+              const initials = (conv.name || '?')[0]?.toUpperCase();
+              const avatarSrc = conv.type === 'direct' ? conv.otherUser?.avatar : undefined;
+              const hasUnread = conv.unreadCount > 0;
               return (
-                <div key={conv.id} className="relative">
-                  <button type="button"
+                <div key={conv.id} className="relative w-full flex items-center justify-center group/convbtn" onContextMenu={e => handleConvContextMenu(e, conv.id)}>
+                  {/* Active indicator pill */}
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full bg-white" />
+                  )}
+                  {/* Hover tooltip */}
+                  <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-[#18160f] border border-white/[0.1] rounded-lg text-white text-xs font-semibold whitespace-nowrap pointer-events-none opacity-0 group-hover/convbtn:opacity-100 transition-opacity z-50 shadow-xl">
+                    {conv.name}
+                    {conv.type === 'community' && <span className="ml-1 text-[#c9a96e] text-[10px]">Community</span>}
+                  </div>
+                  <button
+                    type="button"
                     onClick={() => { setActiveConvId(conv.id); setMobileShowThread(true); setContextMenuConv(null); setConversations(cs => cs.map(c => c.id === conv.id ? { ...c, unreadCount: 0 } : c)); }}
-                    onContextMenu={e => { e.preventDefault(); setContextMenuConv(showCtx ? null : conv.id); }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-[rgba(201,169,110,0.04)] transition-colors text-left
-                      ${activeConvId === conv.id ? 'bg-[rgba(201,169,110,0.08)] border-r-2 border-[#c9a96e]' : ''}`}
+                    className={`relative w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold transition-all
+                      ${isActive ? 'rounded-2xl' : 'hover:rounded-2xl'}
+                    `}
                   >
-                    {/* Option B: Avatar with online presence dot */}
-                    <div className="relative shrink-0">
-                      {conv.type === 'community' ? (
-                        <div className="w-10 h-10 rounded-full bg-[rgba(201,169,110,0.04)] flex items-center justify-center text-xl">{conv.emoji || '👥'}</div>
-                      ) : isGroup && conv.participantProfiles ? (
-                        <GroupAvatarStack profiles={conv.participantProfiles} />
-                      ) : (
-                        <Avatar className="w-10 h-10">
-                          <AvatarImage src={avatarSrc} />
-                          <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-sm font-semibold">{initials}</AvatarFallback>
-                        </Avatar>
-                      )}
-                      {/* Online dot — show for direct chats with recent activity */}
-                      {conv.type === 'direct' && conv.lastMessageAt && (() => {
-                        const diff = Date.now() - new Date(conv.lastMessageAt).getTime();
-                        return diff < 5 * 60 * 1000;
-                      })() && (
-                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[#0d0b08]" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1 min-w-0">
-                          {isPinned && <Pin className="w-2.5 h-2.5 text-[#c9a96e] shrink-0" />}
-                          <p className={`text-white text-sm font-medium truncate ${isMuted ? 'opacity-50' : ''}`}>{conv.name}</p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          {isMuted && <BellOff className="w-2.5 h-2.5 text-white/25" />}
-                          {conv.lastMessageAt && <p className="text-white/25 text-xs">{formatSmartDate(conv.lastMessageAt)}</p>}
-                        </div>
+                    {isCommunity ? (
+                      <div className={`w-11 h-11 rounded-[inherit] flex items-center justify-center text-xl transition-all
+                        ${isActive ? 'bg-[#c9a96e]/20 rounded-2xl' : 'bg-[rgba(255,255,255,0.06)]'}`}>
+                        {conv.emoji || '👥'}
                       </div>
-                      <p className={`text-xs truncate mt-0.5 ${isMuted ? 'text-white/20' : 'text-white/40'}`}>
-                        {conv.type === 'community' && <span className="text-white/20">Community · </span>}
-                        {conv.type === 'group' && <span className="text-white/20">{conv.participantCount} members · </span>}
-                        {conv.lastMessage || 'Start the conversation'}
-                      </p>
-                    </div>
-                    {!isMuted && conv.unreadCount > 0 && (
-                      <span className="shrink-0 w-5 h-5 rounded-full bg-[#c9a96e] text-white text-[10px] font-bold flex items-center justify-center">
+                    ) : avatarSrc ? (
+                      <img src={avatarSrc} alt={conv.name} className={`w-11 h-11 object-cover transition-all ${isActive ? 'rounded-2xl' : 'rounded-full'}`} />
+                    ) : (
+                      <div className={`w-11 h-11 flex items-center justify-center text-white text-sm font-bold transition-all
+                        bg-gradient-to-br from-[#c9a96e] to-[#a07840]
+                        ${isActive ? 'rounded-2xl' : 'rounded-full'}`}>
+                        {initials}
+                      </div>
+                    )}
+                    {/* Unread dot */}
+                    {hasUnread && (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#c9a96e] text-[#080608] text-[9px] font-bold flex items-center justify-center border-2 border-[#070507]">
                         {conv.unreadCount > 9 ? '9+' : conv.unreadCount}
                       </span>
                     )}
                   </button>
-                  {/* Option D: Context menu (right-click) */}
-                  {showCtx && (
-                    <div className="absolute right-3 top-2 z-40 bg-[#0d0b08] border border-[rgba(201,169,110,0.15)] rounded-xl shadow-xl overflow-hidden">
-                      <button type="button" onClick={() => { togglePin(conv.id); setContextMenuConv(null); }}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-white/80 hover:bg-[rgba(201,169,110,0.08)] transition-colors w-full text-left">
-                        {isPinned ? <PinOff className="w-3.5 h-3.5 text-[#c9a96e]" /> : <Pin className="w-3.5 h-3.5 text-[#c9a96e]" />}
-                        {isPinned ? 'Unpin' : 'Pin to top'}
-                      </button>
-                      <button type="button" onClick={() => { toggleMute(conv.id); setContextMenuConv(null); }}
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-white/80 hover:bg-[rgba(201,169,110,0.08)] transition-colors w-full text-left">
-                        {isMuted ? <Bell className="w-3.5 h-3.5 text-white/50" /> : <BellOff className="w-3.5 h-3.5 text-white/50" />}
-                        {isMuted ? 'Unmute' : 'Mute'}
-                      </button>
-                    </div>
-                  )}
                 </div>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
+
+        {/* Divider */}
+        <div className="w-8 h-px bg-white/[0.08] my-1" />
+
+        {/* New conversation button */}
+        <button
+          type="button"
+          title="New conversation"
+          onClick={() => setShowNewGroup(true)}
+          className="w-11 h-11 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center text-white/40 hover:text-white/70 hover:bg-[rgba(255,255,255,0.1)] transition-all hover:rounded-2xl"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
       </div>
 
+      {/* ── Message thread
+
       {/* ── Message thread ────────────────────────────────────────────────── */}
-      <div className={`flex-1 flex flex-col min-w-0 ${!mobileShowThread ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-[#0d0b09] ${!mobileShowThread ? 'hidden md:flex' : 'flex'}`}>
         {activeConv ? (
           <>
             {/* Thread header */}
-            <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[rgba(201,169,110,0.08)] bg-[#0d0b08]">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0806]">
               <button type="button" className="md:hidden shrink-0 text-white/50 hover:text-white" onClick={() => setMobileShowThread(false)}>
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              {/* Clickable avatar + name → view profile (DM only) */}
               <button
                 type="button"
-                className="flex items-center gap-3 flex-1 min-w-0 text-left group"
+                className="flex items-center gap-3 flex-1 min-w-0 text-left"
                 onClick={() => {
                   if (activeConv.type === 'direct' && activeConv.otherUser?.uid && onViewProfile) {
                     onViewProfile(activeConv.otherUser.uid);
                   }
                 }}
-                disabled={activeConv.type === 'group' || activeConv.type === 'community'}
+                disabled={activeConv.type === 'community'}
               >
-                {activeConv.type === 'group' && activeConv.participantProfiles ? (
-                  <GroupAvatarStack profiles={activeConv.participantProfiles} />
-                ) : (
-                  <Avatar className="w-8 h-8 shrink-0">
-                    <AvatarImage src={activeConv.otherUser?.avatar} />
-                    <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-xs font-semibold">
-                      {(activeConv.name || '?')[0]?.toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                )}
+                <div className="relative shrink-0">
+                  {activeConv.type === 'group' && activeConv.icon ? (
+                    <img src={activeConv.icon} className="w-9 h-9 rounded-xl object-cover" alt={activeConv.name} />
+                  ) : activeConv.type === 'group' && activeConv.participantProfiles ? (
+                    <GroupAvatarStack profiles={activeConv.participantProfiles} />
+                  ) : (
+                    <Avatar className="w-9 h-9">
+                      <AvatarImage src={activeConv.otherUser?.avatar} />
+                      <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-sm font-bold">
+                        {(activeConv.name || '?')[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  {otherUserPresence?.isOnline && (
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-[#0a0806]" />
+                  )}
+                </div>
                 <div>
-                  <p className={`text-white font-semibold text-sm ${activeConv.type === 'direct' ? 'group-hover:text-[#e8c98a] transition-colors' : ''}`}>
-                    {activeConv.name}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-white font-semibold text-[14px] leading-tight">{activeConv.name}</p>
+                    {otherUserPresence?.isOnline && <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />}
+                  </div>
                   {activeConv.type === 'direct' && otherUserPresence ? (
-                    <p className="text-xs flex items-center gap-1">
-                      {otherUserPresence.isOnline ? (
-                        <><span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" /><span className="text-green-400">Active now</span></>
-                      ) : otherUserPresence.lastSeen ? (
-                        <><span className="w-1.5 h-1.5 rounded-full bg-white/20 inline-block" /><span className="text-white/30">{(() => {
-                          const diff = Date.now() - new Date(otherUserPresence.lastSeen).getTime();
-                          const mins = Math.floor(diff / 60000);
-                          if (mins < 1) return 'Active just now';
-                          if (mins < 60) return `Active ${mins}m ago`;
-                          const hrs = Math.floor(mins / 60);
-                          if (hrs < 24) return `Active ${hrs}h ago`;
-                          return `Active ${Math.floor(hrs/24)}d ago`;
-                        })()}</span></>
-                      ) : <span className="text-white/40">@{activeConv.otherUser?.username || ''}</span>}
+                    <p className="text-[11px] mt-0.5">
+                      {otherUserPresence.isOnline
+                        ? <span className="text-green-400">Active now</span>
+                        : otherUserPresence.lastSeen
+                          ? <span className="text-white/30">{(() => {
+                              const diff = Date.now() - new Date(otherUserPresence.lastSeen).getTime();
+                              const mins = Math.floor(diff / 60000);
+                              if (mins < 1) return 'active just now';
+                              if (mins < 60) return `active ${mins}m ago`;
+                              const hrs = Math.floor(mins / 60);
+                              return hrs < 24 ? `active ${hrs}h ago` : `active ${Math.floor(hrs/24)}d ago`;
+                            })()}</span>
+                          : <span className="text-white/30">@{activeConv.otherUser?.username || ''}</span>}
                     </p>
                   ) : (
-                    <p className="text-white/40 text-xs">
-                      {activeConv.type === 'group'
-                        ? `${activeConv.participantCount} members`
-                        : `@${activeConv.otherUser?.username || ''}`}
+                    <p className="text-white/30 text-[11px] mt-0.5">
+                      {activeConv.type === 'group' ? `${activeConv.participantCount} members` : `@${activeConv.otherUser?.username || ''}`}
                     </p>
                   )}
                 </div>
               </button>
+              {/* Right-side header actions */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button type="button"
+                  onClick={() => { setShowMsgSearch(s => !s); setMsgSearch(''); }}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${showMsgSearch ? 'text-[#c9a96e] bg-[rgba(201,169,110,0.1)]' : 'text-white/30 hover:text-white/60 hover:bg-white/[0.06]'}`}>
+                  <Search className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            {/* Messages */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {/* Inline message search bar */}
+            {showMsgSearch && (
+              <div className="px-4 py-2 bg-[#0a0806] border-b border-white/[0.04] flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-white/30 shrink-0" />
+                <input
+                  autoFocus
+                  value={msgSearch}
+                  onChange={e => setMsgSearch(e.target.value)}
+                  placeholder="Search messages…"
+                  className="flex-1 bg-transparent text-white/80 text-sm placeholder:text-white/25 focus:outline-none"
+                />
+                {msgSearch && (
+                  <button type="button" onClick={() => setMsgSearch('')} className="text-white/25 hover:text-white/50">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+            {/* Messages — Discord-style grouped */}
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 bg-[#0d0b09]">
               {loadingMsgs ? (
                 <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 text-[#c9a96e] animate-spin" /></div>
-              ) : messages.length === 0 ? (
+              ) : messageGroups.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center py-16">
                   <MessageSquare className="w-8 h-8 text-white/10 mb-3" />
                   <p className="text-white/30 text-sm">No messages yet. Say hello 👋</p>
                 </div>
-              ) : messages.map(msg => {
-                const isOwn = msg.senderId === currentUser.id;
-                const senderProfile = activeConv.type === 'group'
-                  ? activeConv.participantProfiles?.find(p => p.uid === msg.senderId)
-                  : activeConv.otherUser;
-                const reactionEntries = Object.entries(msg.reactions || {});
-                const showPicker = hoveredMsgId === msg.id;
-                return (
-                  <div key={msg.id} className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                    {!isOwn && (
-                      <Avatar className="w-7 h-7 shrink-0 mt-1">
-                        <AvatarImage src={senderProfile?.avatar} />
-                        <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-[10px]">
-                          {(senderProfile?.name || '?')[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
-                    <div className={`max-w-[70%] flex flex-col gap-0.5 ${isOwn ? 'items-end' : 'items-start'}`}>
-                      {activeConv.type === 'group' && !isOwn && (
-                        <p className="text-white/30 text-[10px] px-1">{senderProfile?.name || 'Member'}</p>
-                      )}
-                      {/* Bubble + emoji picker */}
-                      <div className="relative">
-                        {showPicker && (
-                          <div className={`absolute z-20 bottom-full mb-1.5 ${isOwn ? 'right-0' : 'left-0'}`}>
-                            <EmojiReactionPicker onPick={(emoji) => reactToMessage(msg.id, emoji)} />
-                          </div>
-                        )}
-                        <div
-                          className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed select-none
-                            ${isOwn ? 'bg-[#c9a96e] text-white rounded-tr-sm' : 'bg-[rgba(201,169,110,0.06)] text-white/85 rounded-tl-sm'}`}
-                          onMouseEnter={() => {
-                            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                            hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(msg.id), 300);
-                          }}
-                          onMouseLeave={() => {
-                            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                            hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(null), 500);
-                          }}
-                          onTouchStart={() => {
-                            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                            hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(msg.id), 500);
-                          }}
-                          onTouchEnd={() => {
-                            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-                          }}
-                        >
-                          {msg.text && <p>{msg.text}</p>}
-                          {msg.image && <img src={msg.image} alt="attachment" className="mt-1.5 rounded-xl max-h-52 max-w-full object-cover" />}
-                          {msg.audio && (
-                            <div className="mt-1.5 flex items-center gap-2 min-w-[180px]">
-                              <Radio className="w-4 h-4 shrink-0 text-[#e8c98a]" />
-                              <audio src={msg.audio} controls className="h-8 flex-1 min-w-0" style={{ filter: 'invert(0.8) hue-rotate(200deg)', colorScheme: 'dark' }} />
-                            </div>
-                          )}
-                        </div>
+              ) : (
+                <div className="flex flex-col min-h-full"><div className="space-y-5 pt-2">
+                  {/* ── Conversation start banner ── */}
+                  <div className="flex flex-col items-start px-2 pb-6 mb-4 border-b border-white/[0.05]">
+                    {activeConv.type === 'group' && activeConv.participantProfiles ? (
+                      <GroupAvatarStack profiles={activeConv.participantProfiles} />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#c9a96e] to-[#a07840] flex items-center justify-center text-white text-2xl font-bold mb-3">
+                        {(activeConv.name || '?')[0]?.toUpperCase()}
                       </div>
-                      {/* Reactions bar */}
-                      {reactionEntries.length > 0 && (
-                        <div className={`flex flex-wrap gap-1 px-1 mt-0.5 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                          {reactionEntries.map(([emoji, uids]) => {
-                            const isMine = uids.includes(currentUser.id);
+                    )}
+                    <p className="text-white font-bold text-xl mt-1">{activeConv.name}</p>
+                    <p className="text-white/40 text-sm mt-0.5">
+                      {activeConv.type === 'direct'
+                        ? `This is the beginning of your conversation with ${activeConv.name}.`
+                        : activeConv.type === 'group'
+                          ? `Welcome to the group. ${activeConv.participantCount} members.`
+                          : `Community · ${activeConv.name}`}
+                    </p>
+                  </div>
+                  {messageGroups.filter(group =>
+                    !msgSearch || group.messages.some(m => m.text?.toLowerCase().includes(msgSearch.toLowerCase()))
+                  ).map((group, gi) => {
+                    const isOwn = group.senderId === currentUser.id;
+                    const senderProfile = activeConv.type === 'group'
+                      ? activeConv.participantProfiles?.find(p => p.uid === group.senderId)
+                      : (isOwn ? null : activeConv.otherUser);
+                    const senderName = senderProfile?.name || (isOwn ? currentUser.name || currentUser.name : 'Member');
+                    const senderAvatar = senderProfile?.avatar;
+                    return (
+                      <div key={gi} className="flex gap-2.5 justify-start mt-3">
+                        {/* Avatar — always on left */}
+                        <Avatar className="w-8 h-8 shrink-0 mt-1">
+                          <AvatarImage src={isOwn ? currentUser?.avatar : senderAvatar} />
+                          <AvatarFallback className={`text-white text-[10px] font-semibold ${isOwn ? 'bg-gradient-to-br from-orange-500 to-orange-700' : 'bg-gradient-to-br from-[#c9a96e] to-[#a07840]'}`}>
+                            {isOwn ? (currentUser?.name || currentUser?.name || 'Me')[0]?.toUpperCase() : (senderName || '?')[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col gap-0.5 max-w-[72%] items-start">
+                          {/* Name + time header — always shown */}
+                          <div className="flex items-baseline gap-2 px-0.5 mb-0.5">
+                            <span className={`text-xs font-medium ${isOwn ? 'text-[#c9a96e]' : 'text-white/70'}`}>
+                              {isOwn ? (currentUser?.name || currentUser?.name || 'You') : senderName}
+                            </span>
+                            <span className="text-white/25 text-[10px]">{formatSmartDate(group.firstTime)}</span>
+                          </div>
+                          {/* Messages in group */}
+                          {group.messages.map((msg, mi) => {
+                            const isLast = mi === group.messages.length - 1;
+                            const reactionEntries = Object.entries(msg.reactions || {});
+                            const showPicker = hoveredMsgId === msg.id;
+                            const otherIds = (activeConv.participants || []).filter((id: string) => id !== currentUser.id);
+                            const readByOther = isOwn && otherIds.some((id: string) => (msg.readBy || []).includes(id));
                             return (
-                              <button
-                                key={emoji}
-                                type="button"
-                                onClick={() => reactToMessage(msg.id, emoji)}
-                                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all border
-                                  ${isMine
-                                    ? 'bg-[#c9a96e]/25 border-[rgba(201,169,110,0.5)] text-[#e8c98a]'
-                                    : 'bg-[rgba(201,169,110,0.04)] border-[rgba(201,169,110,0.12)] text-white/60 hover:bg-[rgba(201,169,110,0.08)]'}`}
-                              >
-                                <span>{emoji}</span>
-                                <span className="font-medium">{uids.length}</span>
-                              </button>
+                              <div key={msg.id} className="relative group/msg w-full">
+                                {/* Reply-to quote */}
+                                {msg.replyTo && (
+                                  <div className="flex mb-1 justify-start">
+                                    <div className="border-l-2 border-[#c9a96e]/50 pl-2 bg-[rgba(201,169,110,0.04)] rounded-r-lg px-2 py-1 max-w-[90%]">
+                                      <p className="text-[#c9a96e]/70 text-[10px] font-medium">{msg.replyTo.senderName || 'Someone'}</p>
+                                      <p className="text-white/40 text-[11px] truncate">{msg.replyTo.text || '📎 Attachment'}</p>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Bubble — own messages get a subtle gold tint to distinguish */}
+                                <div
+                                  className={`relative inline-block max-w-full text-sm leading-relaxed select-none transition-colors
+                                    ${isOwn
+                                      ? 'bg-[rgba(201,169,110,0.12)] text-white/90 rounded-2xl rounded-tl-md px-3.5 py-2'
+                                      : 'text-white/88 py-0.5'
+                                    }`}
+                                  onMouseEnter={() => {
+                                    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                                    hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(msg.id), 250);
+                                  }}
+                                  onMouseLeave={() => {
+                                    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                                    hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(null), 400);
+                                  }}
+                                  onTouchStart={() => {
+                                    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                                    hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(msg.id), 500);
+                                  }}
+                                  onTouchEnd={() => {
+                                    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+                                  }}
+                                >
+                                  {/* Deleted message */}
+                                  {msg.deleted ? (
+                                    <p className="italic text-white/25 text-xs">Message deleted</p>
+                                  ) : editingMsgId === msg.id ? (
+                                    /* Inline edit */
+                                    <div className="flex flex-col gap-1 min-w-[160px]">
+                                      <input
+                                        autoFocus
+                                        value={editText}
+                                        onChange={e => setEditText(e.target.value)}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); editMessage(msg.id, editText); }
+                                          if (e.key === 'Escape') setEditingMsgId(null);
+                                        }}
+                                        className="bg-transparent text-[#080608] text-sm focus:outline-none w-full"
+                                      />
+                                      <div className="flex gap-2 text-[10px]">
+                                        <button type="button" onClick={() => editMessage(msg.id, editText)} className="text-[#080608]/70 hover:text-[#080608] font-medium">Save</button>
+                                        <button type="button" onClick={() => setEditingMsgId(null)} className="text-[#080608]/40 hover:text-[#080608]/70">Cancel</button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {msg.text && <p className="whitespace-pre-wrap break-words">{msg.text}{msg.editedAt && <span className="text-[10px] opacity-50 ml-1">(edited)</span>}</p>}
+                                      {msg.image && <img src={msg.image} alt="attachment" className="mt-1.5 rounded-xl max-h-52 max-w-full object-cover" />}
+                                      {msg.audio && (
+                                        <div className="mt-1.5 flex items-center gap-2 min-w-[180px]">
+                                          <Radio className="w-4 h-4 shrink-0 text-[#e8c98a]" />
+                                          <audio src={msg.audio} controls className="h-8 flex-1 min-w-0" style={{ filter: 'invert(0.8) hue-rotate(200deg)', colorScheme: 'dark' }} />
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                  {/* Hover actions */}
+                                  {showPicker && !msg.deleted && (
+                                    <div className={`absolute z-30 bottom-full mb-1 ${isOwn ? 'right-0' : 'left-0'} flex items-center gap-1`}
+                                      onMouseEnter={() => { if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current); setHoveredMsgId(msg.id); }}
+                                      onMouseLeave={() => { hoverTimeoutRef.current = setTimeout(() => setHoveredMsgId(null), 400); }}>
+                                      <EmojiReactionPicker onPick={(emoji) => reactToMessage(msg.id, emoji)} />
+                                      <button type="button" onClick={() => { setReplyTo(msg); setHoveredMsgId(null); }}
+                                        className="w-7 h-7 rounded-full bg-[#0d0b08] border border-[rgba(201,169,110,0.2)] flex items-center justify-center text-white/50 hover:text-[#c9a96e] hover:border-[rgba(201,169,110,0.4)] transition-colors text-sm"
+                                        title="Reply">↩</button>
+                                      {isOwn && (
+                                        <>
+                                          <button type="button"
+                                            onClick={() => { setEditingMsgId(msg.id); setEditText(msg.text || ''); setHoveredMsgId(null); }}
+                                            className="w-7 h-7 rounded-full bg-[#0d0b08] border border-[rgba(201,169,110,0.2)] flex items-center justify-center text-white/50 hover:text-[#c9a96e] hover:border-[rgba(201,169,110,0.4)] transition-colors"
+                                            title="Edit">
+                                            <Pencil className="w-3 h-3" />
+                                          </button>
+                                          <button type="button"
+                                            onClick={() => { deleteMessage(msg.id); setHoveredMsgId(null); }}
+                                            className="w-7 h-7 rounded-full bg-[#0d0b08] border border-red-500/20 flex items-center justify-center text-white/50 hover:text-red-400 hover:border-red-500/40 transition-colors"
+                                            title="Delete">
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                {/* Reactions */}
+                                {reactionEntries.length > 0 && (
+                                  <div className={`flex flex-wrap gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                                    {reactionEntries.map(([emoji, uids]) => {
+                                      const isMine = uids.includes(currentUser.id);
+                                      return (
+                                        <button key={emoji} type="button" onClick={() => reactToMessage(msg.id, emoji)}
+                                          className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs transition-all border
+                                            ${isMine ? 'bg-[#c9a96e]/20 border-[rgba(201,169,110,0.4)] text-[#e8c98a]' : 'bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.08)] text-white/60 hover:bg-[rgba(201,169,110,0.08)]'}`}>
+                                          <span>{emoji}</span>
+                                          <span className="font-medium">{uids.length}</span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {/* Timestamp + read for own last message */}
+                                {isOwn && isLast && (
+                                  <div className="flex items-center justify-start gap-1 mt-0.5 px-0.5">
+                                    {readByOther
+                                      ? <CheckCheck className="w-3 h-3 text-[#c9a96e]" />
+                                      : <Check className="w-3 h-3 text-white/25" />}
+                                  </div>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
-                      )}
-                      <div className="flex items-center gap-1 px-1">
-                        <p className="text-white/25 text-[10px]">{formatSmartDate(msg.createdAt)}</p>
-                        {isOwn && (() => {
-                          const otherIds = (activeConv.participants || []).filter((id: string) => id !== currentUser.id);
-                          const readByOther = otherIds.some((id: string) => (msg.readBy || []).includes(id));
-                          return readByOther
-                            ? <CheckCheck className="w-3 h-3 text-[#c9a96e] shrink-0" />
-                            : <Check className="w-3 h-3 text-white/25 shrink-0" />;
-                        })()}
+                      </div>
+                    );
+                  })}
+                  {/* Typing indicator */}
+                  {typingUsers.length > 0 && (
+                    <div className="flex gap-2.5 mt-3">
+                      <div className="w-8 h-8 rounded-full bg-[rgba(255,255,255,0.06)] flex items-center justify-center shrink-0">
+                        <span className="text-xs">💬</span>
+                      </div>
+                      <div className="bg-[rgba(255,255,255,0.06)] rounded-2xl rounded-tl-md px-3 py-2 flex items-center gap-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  )}
+                </div></div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Image preview */}
             {imagePreview && (
-              <div className="px-5 pb-2">
+              <div className="px-4 pb-2">
                 <div className="relative inline-block">
                   <img src={imagePreview} alt="preview" className="h-16 rounded-xl border border-[rgba(201,169,110,0.12)] object-cover" />
                   <button type="button" onClick={() => { setImageData(null); setImagePreview(null); }}
@@ -1016,96 +1217,237 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
 
             {/* Audio preview */}
             {audioBlob && (
-              <div className="px-5 pb-2 flex items-center gap-3">
+              <div className="px-4 pb-2 flex items-center gap-3">
                 <audio src={URL.createObjectURL(audioBlob)} controls className="h-8 flex-1" style={{ filter: 'invert(0.8) hue-rotate(200deg)', colorScheme: 'dark' }} />
                 <button onClick={() => setAudioBlob(null)} className="text-white/30 hover:text-red-400 transition-colors">
                   <X className="w-4 h-4" />
                 </button>
                 <button onClick={sendVoiceMessage} disabled={sending}
-                  className="px-3 py-1.5 rounded-lg bg-[#c9a96e] text-white text-xs font-medium hover:bg-[#c9a96e] disabled:opacity-50 transition-all">
+                  className="px-3 py-1.5 rounded-lg bg-[#c9a96e] text-white text-xs font-medium hover:opacity-90 disabled:opacity-50 transition-all">
                   {sending ? '…' : 'Send'}
                 </button>
               </div>
             )}
 
+            {/* Reply indicator */}
+            {replyTo && (
+              <div className="mx-4 mb-1 flex items-center gap-2 bg-[rgba(201,169,110,0.06)] border border-[rgba(201,169,110,0.15)] rounded-xl px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[#c9a96e] text-[10px] font-semibold">Replying to {replyTo.senderId === currentUser.id ? 'yourself' : (activeConv?.otherUser?.name || 'message')}</p>
+                  <p className="text-white/50 text-xs truncate">{replyTo.text || '📎 Attachment'}</p>
+                </div>
+                <button type="button" onClick={() => setReplyTo(null)} className="text-white/30 hover:text-white/60 transition-colors shrink-0">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* Compose row */}
-            <div className="flex gap-2 px-5 py-3 border-t border-[rgba(201,169,110,0.08)] bg-[#0d0b08]">
+            <div className="px-4 py-3 bg-[#0d0b09] border-t border-white/[0.06]">
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
-              <button type="button" onClick={() => fileRef.current?.click()}
-                className="shrink-0 w-9 h-9 rounded-xl bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.12)] flex items-center justify-center text-white/40 hover:text-[#c9a96e] hover:border-[rgba(201,169,110,0.25)] hover:bg-[rgba(201,169,110,0.08)] transition-all">
-                <ImagePlus className="w-4 h-4" />
-              </button>
-              <button type="button"
-                onClick={recording ? stopRecording : startRecording}
-                className={`shrink-0 w-9 h-9 rounded-xl border flex items-center justify-center transition-all ${recording ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse' : 'bg-[rgba(201,169,110,0.04)] border-[rgba(201,169,110,0.12)] text-white/40 hover:text-[#c9a96e] hover:border-[rgba(201,169,110,0.25)] hover:bg-[rgba(201,169,110,0.08)]'}`}>
-                {recording ? <StopCircle className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-              <Input value={text} onChange={e => setText(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                placeholder="Type a message…"
-                className="flex-1 bg-[rgba(201,169,110,0.04)] border-[rgba(201,169,110,0.12)] text-white placeholder:text-white/25 text-sm h-9 focus:border-[rgba(201,169,110,0.5)]" />
-              <button type="button" disabled={(!text.trim() && !imageData) || sending} onClick={handleSend}
-                className="shrink-0 w-9 h-9 rounded-xl bg-[#c9a96e] text-white flex items-center justify-center hover:opacity-90 disabled:opacity-40 transition-all">
-                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </button>
+              <div className="flex items-center gap-2 bg-white/[0.07] rounded-xl px-3 py-2">
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  className="shrink-0 w-7 h-7 flex items-center justify-center text-white/30 hover:text-white/60 transition-colors">
+                  <ImagePlus className="w-4 h-4" />
+                </button>
+                <button type="button" onClick={recording ? stopRecording : startRecording}
+                  className={`shrink-0 w-7 h-7 flex items-center justify-center transition-all ${recording ? 'text-red-400 animate-pulse' : 'text-white/30 hover:text-white/60'}`}>
+                  {recording ? <StopCircle className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+                <input
+                  value={text}
+                  onChange={e => { setText(e.target.value); sendTyping(); }}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                  placeholder={replyTo ? 'Write a reply…' : `Message ${activeConv?.name || ''}…`}
+                  className="flex-1 bg-transparent text-white/90 placeholder:text-white/25 text-sm focus:outline-none"
+                />
+                <button type="button" disabled={(!text.trim() && !imageData) || sending} onClick={handleSend}
+                  className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 text-[#c9a96e] hover:text-[#e8c98a]">
+                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           </>
         ) : (
-          /* Option A: Rich empty state */
-          <div className="flex-1 overflow-y-auto px-6 py-8">
-            <div className="max-w-sm mx-auto space-y-6">
-              {/* Hero */}
-              <div className="text-center space-y-2">
-                <div className="w-14 h-14 rounded-2xl bg-[rgba(201,169,110,0.08)] border border-[rgba(201,169,110,0.18)] flex items-center justify-center mx-auto">
-                  <MessageSquare className="w-7 h-7 text-[#c9a96e]" />
-                </div>
-                <p className="text-white font-semibold">Your Messages</p>
-                <p className="text-white/40 text-sm">Send a message or start a new group chat</p>
-              </div>
-              {/* Quick actions */}
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => setShowNewGroup(true)}
-                  className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.10)] hover:border-[rgba(201,169,110,0.25)] hover:bg-[rgba(201,169,110,0.08)] transition-all text-center">
-                  <Users className="w-5 h-5 text-[#c9a96e]" />
-                  <span className="text-white/70 text-xs font-medium">New Group</span>
-                </button>
-                <button type="button" onClick={() => { const el = document.querySelector<HTMLInputElement>('input[placeholder="Search or start new chat…"]'); el?.focus(); }}
-                  className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.10)] hover:border-[rgba(201,169,110,0.25)] hover:bg-[rgba(201,169,110,0.08)] transition-all text-center">
-                  <Search className="w-5 h-5 text-[#c9a96e]" />
-                  <span className="text-white/70 text-xs font-medium">Find Someone</span>
-                </button>
-              </div>
-              {/* Suggested people */}
-              {followingSuggestions.length > 0 && (
-                <div>
-                  <p className="text-white/30 text-[10px] font-semibold uppercase tracking-wider mb-3">People you follow</p>
-                  <div className="space-y-1">
-                    {followingSuggestions.slice(0, 5).map(u => (
-                      <button key={u.uid} type="button" onClick={() => startDM(u.uid)}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[rgba(201,169,110,0.06)] border border-transparent hover:border-[rgba(201,169,110,0.12)] transition-all text-left">
-                        <Avatar className="w-9 h-9 shrink-0">
-                          <AvatarImage src={u.avatar} />
-                          <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-sm font-semibold">{u.name?.[0] || '?'}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-medium truncate">{u.name}</p>
-                          <p className="text-white/40 text-xs">@{u.username}</p>
-                        </div>
-                        <MessageSquare className="w-3.5 h-3.5 text-[#c9a96e]/50 shrink-0" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {/* Tip */}
-              <div className="bg-[rgba(201,169,110,0.04)] border border-[rgba(201,169,110,0.08)] rounded-xl px-4 py-3">
-                <p className="text-[#e8c98a]/70 text-[10px] font-semibold uppercase tracking-wider mb-1">Pro tip</p>
-                <p className="text-white/40 text-xs leading-relaxed">Right-click any conversation to pin it to the top or mute notifications.</p>
-              </div>
+          <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center mb-5">
+              <MessageSquare className="w-8 h-8 text-white/20" />
             </div>
+            <p className="text-white/70 font-semibold text-base mb-1">Direct Messages</p>
+            <p className="text-white/30 text-sm mb-6 max-w-[260px]">Select a conversation or start a new one</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setShowNewGroup(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.08] text-white/60 hover:text-white/80 text-sm font-medium transition-all">
+                <Users className="w-4 h-4" />New Group
+              </button>
+              <button type="button" onClick={() => { const el = document.querySelector<HTMLInputElement>('input[placeholder="Find or start a conversation"]'); el?.focus(); }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#c9a96e] hover:opacity-90 text-[#080608] text-sm font-semibold transition-all">
+                <Search className="w-4 h-4" />Find Someone
+              </button>
+            </div>
+            {followingSuggestions.length > 0 && (
+              <div className="mt-8 w-full max-w-[320px]">
+                <p className="text-white/20 text-[10px] font-semibold uppercase tracking-widest mb-3">People you follow</p>
+                <div className="space-y-1">
+                  {followingSuggestions.slice(0, 4).map(u => (
+                    <button key={u.uid} type="button" onClick={() => startDM(u.uid)}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-all text-left">
+                      <Avatar className="w-8 h-8 shrink-0">
+                        <AvatarImage src={u.avatar} />
+                        <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-xs font-bold">{u.name?.[0] || '?'}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white/70 text-sm font-medium truncate">{u.name}</p>
+                        <p className="text-white/25 text-xs">@{u.username}</p>
+                      </div>
+                      <Send className="w-3 h-3 text-white/20" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Conversation right-click context menu */}
+      {contextMenuConv && (() => {
+        const conv = conversations.find(c => c.id === contextMenuConv);
+        if (!conv) return null;
+        const isGroup = conv.type === 'group';
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setContextMenuConv(null)} />
+            <div className="fixed z-50 w-44 bg-[#0d0b08] border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden py-1"
+              style={{ top: contextMenuPos.y, left: contextMenuPos.x }}>
+              {isGroup ? (
+                <button type="button" onClick={() => handleLeaveGroup(conv.id)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-all">
+                  <LogOut className="w-4 h-4" /> Leave group
+                </button>
+              ) : (
+                <button type="button" onClick={() => handleDeleteConv(conv.id)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-all">
+                  <Trash2 className="w-4 h-4" /> Delete chat
+                </button>
+              )}
+            </div>
+          </>
+        );
+      })()}
+
+      {/* Group Info Panel */}
+      {showGroupInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/50 backdrop-blur-sm" onClick={() => setShowGroupInfo(false)}>
+          <div className="w-full max-w-xs h-full bg-[#0a0806] border-l border-white/[0.06] flex flex-col overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <p className="text-white font-semibold">Group Info</p>
+              <button type="button" onClick={() => setShowGroupInfo(false)} className="text-white/40 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+
+            {groupInfoLoading ? (
+              <div className="flex-1 flex items-center justify-center"><Loader2 className="w-6 h-6 text-[#c9a96e] animate-spin" /></div>
+            ) : groupInfo ? (
+              <div className="p-5 space-y-6">
+                {/* Group icon + name */}
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative">
+                    {groupInfo.icon ? (
+                      <img src={groupInfo.icon} className="w-20 h-20 rounded-2xl object-cover border border-white/[0.08]" alt="Group" />
+                    ) : (
+                      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#c9a96e]/30 to-[#c9a96e]/10 border border-white/[0.08] flex items-center justify-center text-3xl">
+                        👥
+                      </div>
+                    )}
+                    {/* Change icon button — leader only */}
+                    {groupInfo.createdBy === currentUser?.id && (
+                      <label className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full bg-[#c9a96e] flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity border-2 border-[#0a0806]">
+                        <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleGroupIconChange(groupInfo.id, f); }} />
+                        <Plus className="w-3.5 h-3.5 text-[#0d0b08]" />
+                      </label>
+                    )}
+                  </div>
+                  <p className="text-white font-bold text-lg text-center">{groupInfo.name}</p>
+                  <p className="text-white/30 text-xs">{groupInfo.members.length} members</p>
+                </div>
+
+                {/* Members list */}
+                <div>
+                  <p className="text-white/30 text-[10px] uppercase tracking-wider font-semibold mb-3">Members</p>
+                  <div className="space-y-1">
+                    {groupInfo.members.map(m => {
+                      const isLeader   = m.uid === groupInfo.createdBy;
+                      const isAdmin    = groupInfo.admins.includes(m.uid);
+                      const iAmLeader  = groupInfo.createdBy === currentUser?.id;
+                      const isSelf     = m.uid === currentUser?.id;
+                      const showMenu   = memberActionUid === m.uid;
+                      return (
+                        <div key={m.uid} className="relative">
+                          <div className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-white/[0.03] transition-all">
+                            <Avatar className="w-9 h-9 shrink-0">
+                              <AvatarImage src={m.avatar} />
+                              <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-xs font-bold">{m.name[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white/80 text-sm font-medium truncate">{m.name}{isSelf && <span className="text-white/30 text-xs ml-1">(you)</span>}</p>
+                              {m.username && <p className="text-white/30 text-xs">@{m.username}</p>}
+                            </div>
+                            {isLeader && <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-[rgba(201,169,110,0.15)] text-[#c9a96e] border border-[rgba(201,169,110,0.2)] font-semibold">Leader</span>}
+                            {!isLeader && isAdmin && <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-[rgba(99,102,241,0.15)] text-indigo-300 border border-indigo-500/20 font-semibold">Admin</span>}
+                            {/* Action button — only leader sees it, not for themselves */}
+                            {iAmLeader && !isSelf && (
+                              <button type="button" onClick={() => setMemberActionUid(showMenu ? null : m.uid)}
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.08] transition-all text-lg leading-none">
+                                ⋯
+                              </button>
+                            )}
+                          </div>
+                          {/* Action dropdown */}
+                          {showMenu && iAmLeader && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setMemberActionUid(null)} />
+                              <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-[#0d0b08] border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden py-1">
+                                {isAdmin ? (
+                                  <button type="button" onClick={() => groupAction('demote', m.uid)}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-white/60 hover:bg-white/[0.05] hover:text-white transition-all">
+                                    ↓ Remove Admin role
+                                  </button>
+                                ) : (
+                                  <button type="button" onClick={() => groupAction('promote', m.uid)}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-indigo-300 hover:bg-indigo-500/10 transition-all">
+                                    ↑ Make Admin
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => groupAction('transfer', m.uid)}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[#c9a96e] hover:bg-[rgba(201,169,110,0.08)] transition-all">
+                                  👑 Transfer Leadership
+                                </button>
+                                <div className="border-t border-white/[0.05] my-1" />
+                                <button type="button" onClick={() => groupAction('kick', m.uid)}
+                                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-all">
+                                  ✕ Remove from group
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Leave group */}
+                <button type="button"
+                  onClick={() => { setShowGroupInfo(false); handleLeaveGroup(groupInfo.id); }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-all text-sm font-medium">
+                  <LogOut className="w-4 h-4" /> Leave group
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* New Group Chat modal */}
       {showNewGroup && (

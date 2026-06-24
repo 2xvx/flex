@@ -552,6 +552,61 @@ export function ReelsPage({ currentUser, onViewProfile, onHashtag }: Props) {
             ))}
           </div>
         )}
+
+      {/* Upload modal */}
+      {showUpload && (
+        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#111] rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-bold text-lg">Post a Clip</h2>
+              <button onClick={() => { setShowUpload(false); setVideoFile(null); setCaption(''); }}
+                className="text-white/40 hover:text-white transition-colors text-xl">✕</button>
+            </div>
+
+            {!videoFile ? (
+              <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-white/20 rounded-xl p-8 cursor-pointer hover:border-[#c9a96e]/50 transition-colors">
+                <Upload className="w-8 h-8 text-white/40" />
+                <span className="text-white/50 text-sm">Tap to select video</span>
+                <input type="file" accept="video/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) setVideoFile(f); }} />
+              </label>
+            ) : (
+              <div className="flex items-center gap-3 bg-white/5 rounded-xl p-3">
+                <div className="w-10 h-10 rounded-lg bg-[#c9a96e]/20 flex items-center justify-center flex-shrink-0">
+                  <Upload className="w-4 h-4 text-[#c9a96e]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-medium truncate">{videoFile.name}</p>
+                  <p className="text-white/40 text-xs">{(videoFile.size / 1024 / 1024).toFixed(1)} MB</p>
+                </div>
+                <button onClick={() => setVideoFile(null)} className="text-white/30 hover:text-white/70 text-xl">✕</button>
+              </div>
+            )}
+
+            <textarea
+              value={caption}
+              onChange={e => setCaption(e.target.value)}
+              placeholder="Add a caption… (optional)"
+              rows={3}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm resize-none focus:outline-none focus:border-[#c9a96e]/50"
+            />
+
+            {uploading && (
+              <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                <div className="h-full bg-[#c9a96e] transition-all duration-300 rounded-full"
+                  style={{ width: `${upProgress}%` }} />
+              </div>
+            )}
+
+            <button onClick={handleUpload} disabled={!videoFile || uploading}
+              className="w-full py-3 rounded-xl bg-[#c9a96e] text-black font-semibold text-sm disabled:opacity-40 flex items-center justify-center gap-2 transition-opacity">
+              {uploading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading {upProgress}%</>
+                : <><Upload className="w-4 h-4" /> Post Clip</>}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
