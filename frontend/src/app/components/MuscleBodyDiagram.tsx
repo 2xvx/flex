@@ -237,8 +237,19 @@ export function MuscleBodyDiagram({ primaryMuscles, secondaryMuscles, size = 'md
           </span>
         )}
       </div>
-      <div className="mt-1 flex items-center justify-center gap-2 py-2 bg-[#c9a96e]/6 border border-[#c9a96e]/15 rounded-xl">
-        <span className="text-[10px] text-[#c9a96e]/60 font-medium">🧊 Interactive 3D view — coming soon</span>
+      <div className="mt-1 flex items-center justify-center gap-4 py-1">
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-[#c9a96e]" />
+          <span className="text-white/35 text-[10px]">Primary</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+          <span className="text-white/35 text-[10px]">Secondary</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
+          <span className="text-white/20 text-[10px]">Not targeted</span>
+        </div>
       </div>
     </div>
   );

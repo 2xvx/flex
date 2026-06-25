@@ -53,6 +53,203 @@ const CAT_ICONS: Record<string, string> = {
   Mobility: '🔄', Stretch: '🤸', All: '📚',
 };
 
+// ── Demo exercises — shown when no trainers have published yet ────────────────
+const DEMO_EXERCISES: Exercise[] = [
+  {
+    id: 'demo_bench', name: 'Barbell Bench Press', category: 'strength',
+    difficulty: 'intermediate', equipment: ['Barbell', 'Bench'],
+    primaryMuscles: ['chest'], secondaryMuscles: ['front_delts', 'triceps'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=vcBig73ojpE',
+    steps: [
+      'Lie flat on the bench, eyes directly under the bar.',
+      'Grip the bar slightly wider than shoulder-width, thumbs wrapped around.',
+      'Unrack, lower the bar to your mid-chest in 2–3 seconds.',
+      'Press the bar back up in a slight arc until arms are fully locked out.',
+    ],
+    mistakes: ['Flaring elbows past 75° — keep them at 45–60°.', 'Bouncing the bar off the chest.', 'Hips rising off the bench.'],
+    variations: [{ name: 'Dumbbell Bench Press', type: 'easier' }, { name: 'Paused Bench Press', type: 'harder' }],
+    trainerTip: 'Squeeze your shoulder blades together before unracking — it creates a stable shelf and protects your shoulders.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 1247, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_squat', name: 'Barbell Back Squat', category: 'strength',
+    difficulty: 'intermediate', equipment: ['Barbell', 'Squat Rack'],
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings', 'lower_back', 'adductors'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=ultWZbUMPL8',
+    steps: [
+      'Position bar on your upper traps and step back from the rack.',
+      'Feet shoulder-width apart, toes pointed out 15–30°.',
+      'Brace core, push knees out and descend until hips are below knees.',
+      'Drive through the whole foot to return to standing.',
+    ],
+    mistakes: ['Knees caving inward (valgus collapse).', 'Heels rising off the floor.', 'Rounding the lower back at the bottom.'],
+    variations: [{ name: 'Goblet Squat', type: 'easier' }, { name: 'Pause Squat', type: 'harder' }],
+    trainerTip: 'Think "spread the floor" with your feet — this cue activates your glutes and keeps knees tracked over toes.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 1583, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_deadlift', name: 'Conventional Deadlift', category: 'strength',
+    difficulty: 'advanced', equipment: ['Barbell'],
+    primaryMuscles: ['hamstrings', 'glutes', 'lower_back'], secondaryMuscles: ['traps', 'lats', 'forearms'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=op9kVnSso6Q',
+    steps: [
+      'Stand with the bar over mid-foot, feet hip-width apart.',
+      'Hinge at the hips and grip the bar just outside your legs.',
+      'Take a deep breath, brace your core and lat-spread the bar.',
+      'Push the floor away to stand tall — lock hips and knees out together.',
+      'Hinge back down with control, keeping the bar close to the body.',
+    ],
+    mistakes: ['Jerking the bar off the floor.', 'Rounding the upper back.', 'Bar drifting away from the body.'],
+    variations: [{ name: 'Trap Bar Deadlift', type: 'easier' }, { name: 'Deficit Deadlift', type: 'harder' }],
+    trainerTip: '"Leg press the earth away" — thinking of it as a leg press rather than a pull reduces lower-back rounding.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 2031, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_pullup', name: 'Pull-Up', category: 'strength',
+    difficulty: 'intermediate', equipment: ['Pull-up Bar'],
+    primaryMuscles: ['lats', 'biceps'], secondaryMuscles: ['rhomboids', 'rear_delts', 'forearms'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=eGo4IYlbE5g',
+    steps: [
+      'Hang from the bar with an overhand grip, slightly wider than shoulders.',
+      'Depress your shoulder blades and drive elbows down toward your hips.',
+      'Pull your chin over the bar, squeezing the lats at the top.',
+      'Lower yourself fully with control to a dead hang.',
+    ],
+    mistakes: ['Kipping / swinging for reps.', 'Not reaching full extension at the bottom.', 'Shrugging shoulders up instead of depressing them.'],
+    variations: [{ name: 'Assisted Pull-Up / Band', type: 'easier' }, { name: 'Weighted Pull-Up', type: 'harder' }],
+    trainerTip: 'Imagine you\'re trying to put your elbows in your back pockets — this cue instantly engages your lats.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 987, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_ohp', name: 'Overhead Press', category: 'strength',
+    difficulty: 'intermediate', equipment: ['Barbell'],
+    primaryMuscles: ['front_delts'], secondaryMuscles: ['triceps', 'traps'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=qEwKCR5JCog',
+    steps: [
+      'Grip the bar just outside shoulder-width, wrists stacked over elbows.',
+      'Unrack the bar to shoulder level, elbows slightly forward.',
+      'Press the bar straight up, slipping your chin back to clear the path.',
+      'Lock out overhead then lower back to shoulders with control.',
+    ],
+    mistakes: ['Pressing in front of the face instead of straight up.', 'Flaring the rib cage (over-arching).', 'Not locking out at the top.'],
+    variations: [{ name: 'Dumbbell Shoulder Press', type: 'easier' }, { name: 'Push Press', type: 'harder' }],
+    trainerTip: 'Keep your glutes and abs tight throughout — the whole body acts as a base for a stable overhead press.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 743, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_row', name: 'Barbell Row', category: 'strength',
+    difficulty: 'intermediate', equipment: ['Barbell'],
+    primaryMuscles: ['lats', 'rhomboids'], secondaryMuscles: ['rear_delts', 'biceps', 'lower_back'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=kBWAon7ItDw',
+    steps: [
+      'Hinge until your torso is ~45° from horizontal, bar hanging at mid-shin.',
+      'Row the bar into your lower sternum, driving elbows past your torso.',
+      'Squeeze the shoulder blades together at the top for 1 second.',
+      'Lower the bar with control back to the start position.',
+    ],
+    mistakes: ['Using momentum / hip drive.', 'Rowing to the belly button instead of lower chest.', 'Excessive torso rocking.'],
+    variations: [{ name: 'Dumbbell Row', type: 'easier' }, { name: 'Pendlay Row', type: 'harder' }],
+    trainerTip: 'Lead with the elbow, not the hand — this keeps the focus on the back and off the biceps.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 621, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_rdl', name: 'Romanian Deadlift', category: 'strength',
+    difficulty: 'intermediate', equipment: ['Barbell'],
+    primaryMuscles: ['hamstrings', 'glutes'], secondaryMuscles: ['lower_back', 'forearms'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=JCXUYuzwNrM',
+    steps: [
+      'Stand with the bar in front of you, overhand grip at hip-width.',
+      'Hinge at the hips, pushing them back, lowering the bar along your legs.',
+      'Stop when you feel a strong hamstring stretch (usually just below the knee).',
+      'Drive hips forward to return to standing, squeezing glutes at the top.',
+    ],
+    mistakes: ['Bending the knees too much (turning it into a squat).', 'Rounding the lower back.', 'Bar drifting away from the legs.'],
+    variations: [{ name: 'Dumbbell RDL', type: 'easier' }, { name: 'Single-Leg RDL', type: 'harder' }],
+    trainerTip: 'Drag the bar down your legs — it keeps it close and forces a proper hip hinge pattern.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 812, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_pushup', name: 'Push-Up', category: 'strength',
+    difficulty: 'beginner', equipment: ['Bodyweight'],
+    primaryMuscles: ['chest', 'triceps'], secondaryMuscles: ['front_delts', 'abs'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=IODxDxX7oi4',
+    steps: [
+      'Place hands slightly wider than shoulder-width on the floor.',
+      'Keep your body in a straight line from head to heels — no sagging hips.',
+      'Lower your chest to the floor with elbows at ~45° to the torso.',
+      'Press back up explosively until arms are fully extended.',
+    ],
+    mistakes: ['Sagging the hips — always keep the body rigid.', 'Flaring elbows to 90°.', 'Not reaching full depth (chest must touch or nearly touch the floor).'],
+    variations: [{ name: 'Knee Push-Up', type: 'easier' }, { name: 'Archer Push-Up', type: 'harder' }],
+    trainerTip: 'Squeeze everything — glutes, abs, quads — the push-up is a full-body tension exercise, not just a chest move.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 534, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_curl', name: 'Dumbbell Bicep Curl', category: 'strength',
+    difficulty: 'beginner', equipment: ['Dumbbell'],
+    primaryMuscles: ['biceps'], secondaryMuscles: ['forearms'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=ykJmrZ5v0Oo',
+    steps: [
+      'Stand with a dumbbell in each hand, arms fully extended, palms facing forward.',
+      'Curl the weights up by flexing at the elbow — keep upper arms stationary.',
+      'Squeeze the biceps hard at the top, hold for 1 second.',
+      'Lower slowly back to full extension — the eccentric phase builds the most size.',
+    ],
+    mistakes: ['Swinging the torso to get the weight up.', 'Not reaching full extension at the bottom.', 'Elbows drifting forward at the top.'],
+    variations: [{ name: 'Hammer Curl', type: 'easier' }, { name: 'Incline Dumbbell Curl', type: 'harder' }],
+    trainerTip: 'Slow the lowering phase to 3–4 seconds — most bicep growth happens on the way down.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 478, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_plank', name: 'Plank', category: 'strength',
+    difficulty: 'beginner', equipment: ['Bodyweight'],
+    primaryMuscles: ['abs'], secondaryMuscles: ['obliques', 'hip_flexors'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=ASdvN_XEl_c',
+    steps: [
+      'Place forearms on the floor, elbows directly under your shoulders.',
+      'Lift your hips so your body forms a straight line head to heels.',
+      'Brace your abs as if bracing for a punch — breathe normally.',
+      'Hold for the prescribed time without letting hips drop or rise.',
+    ],
+    mistakes: ['Hips sagging down.', 'Hips piking too high.', 'Holding your breath.'],
+    variations: [{ name: 'Knee Plank', type: 'easier' }, { name: 'RKC Plank', type: 'harder' }],
+    trainerTip: 'Try to "pull" your elbows and toes toward each other — this shortens the core and dramatically increases tension.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 355, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_boxjump', name: 'Box Jump', category: 'power',
+    difficulty: 'intermediate', equipment: ['Plyometric Box'],
+    primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings', 'calves'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=52r4M2bsFmQ',
+    steps: [
+      'Stand facing the box at about arm\'s length away.',
+      'Dip into a quarter squat, swinging arms back for momentum.',
+      'Explode upward, swinging arms forward, and land softly on the box with knees bent.',
+      'Stand fully on the box, then step (do not jump) back down.',
+    ],
+    mistakes: ['Landing stiff-legged — always land with soft, bent knees.', 'Jumping too high before mastering lower boxes.', 'Jumping back down (high injury risk).'],
+    variations: [{ name: 'Step-Up', type: 'easier' }, { name: 'Depth Jump', type: 'harder' }],
+    trainerTip: 'Land as quietly as possible — silent landings mean your muscles, not your joints, are absorbing the force.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 428, createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'demo_latpulldown', name: 'Lat Pulldown', category: 'strength',
+    difficulty: 'beginner', equipment: ['Cable', 'Machine'],
+    primaryMuscles: ['lats'], secondaryMuscles: ['biceps', 'rear_delts', 'rhomboids'],
+    photos: [], videoUrl: 'https://www.youtube.com/watch?v=CAwf7n6Luuc',
+    steps: [
+      'Sit at the pulldown station, pad secure over your thighs, grip wide.',
+      'Lean back slightly, depress your shoulder blades.',
+      'Pull the bar to your upper chest, driving elbows down and back.',
+      'Squeeze the lats at the bottom, then slowly return to the top.',
+    ],
+    mistakes: ['Pulling behind the neck (shoulder injury risk).', 'Using momentum / body rock.', 'Not fully extending arms at the top.'],
+    variations: [{ name: 'Close-Grip Pulldown', type: 'easier' }, { name: 'Single-Arm Cable Pulldown', type: 'harder' }],
+    trainerTip: 'Think of your hands as hooks and your elbows as the primary movers — this shifts work from biceps to lats.',
+    authorId: 'flex_team', authorName: 'Flex Team', authorVerified: true, saves: 690, createdAt: new Date().toISOString(),
+  },
+];
+
 function isDirectVideo(url?: string | null): boolean {
   if (!url) return false;
   return /\.(mp4|webm|mov|ogg)(\?.*)?$/i.test(url);
@@ -116,8 +313,22 @@ export function ExerciseLibraryPage({ currentUser }: Props) {
       if (equipment !== 'All') params.set('equipment', equipment.toLowerCase());
       const res  = await authFetch(`${API}/exercises?${params}`);
       const data = await res.json();
-      setExercises(data.exercises || []);
-    } catch { toast.error('Could not load exercises'); }
+      const apiExercises: Exercise[] = data.exercises || [];
+      if (apiExercises.length > 0) {
+        setExercises(apiExercises);
+      } else {
+        // No trainer exercises yet — filter and show demo exercises
+        let demos = DEMO_EXERCISES;
+        if (search) demos = demos.filter(e => e.name.toLowerCase().includes(search.toLowerCase()));
+        if (category !== 'All') demos = demos.filter(e => e.category.toLowerCase() === category.toLowerCase());
+        if (difficulty !== 'All') demos = demos.filter(e => e.difficulty === difficulty.toLowerCase());
+        if (equipment !== 'All') demos = demos.filter(e => e.equipment.some(eq => eq.toLowerCase() === equipment.toLowerCase()));
+        setExercises(demos);
+      }
+    } catch {
+      // API unreachable — use demo exercises
+      setExercises(DEMO_EXERCISES);
+    }
     finally  { setLoading(false); }
   }, [search, category, difficulty, equipment]);
 
