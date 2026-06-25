@@ -59,7 +59,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_bench', name: 'Barbell Bench Press', category: 'strength',
     difficulty: 'intermediate', equipment: ['Barbell', 'Bench'],
     primaryMuscles: ['chest'], secondaryMuscles: ['front_delts', 'triceps'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=vcBig73ojpE',
+    photos: ['https://img.youtube.com/vi/vcBig73ojpE/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=vcBig73ojpE',
     steps: [
       'Lie flat on the bench, eyes directly under the bar.',
       'Grip the bar slightly wider than shoulder-width, thumbs wrapped around.',
@@ -75,7 +75,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_squat', name: 'Barbell Back Squat', category: 'strength',
     difficulty: 'intermediate', equipment: ['Barbell', 'Squat Rack'],
     primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings', 'lower_back', 'adductors'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=ultWZbUMPL8',
+    photos: ['https://img.youtube.com/vi/ultWZbUMPL8/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=ultWZbUMPL8',
     steps: [
       'Position bar on your upper traps and step back from the rack.',
       'Feet shoulder-width apart, toes pointed out 15–30°.',
@@ -91,7 +91,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_deadlift', name: 'Conventional Deadlift', category: 'strength',
     difficulty: 'advanced', equipment: ['Barbell'],
     primaryMuscles: ['hamstrings', 'glutes', 'lower_back'], secondaryMuscles: ['traps', 'lats', 'forearms'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=op9kVnSso6Q',
+    photos: ['https://img.youtube.com/vi/op9kVnSso6Q/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=op9kVnSso6Q',
     steps: [
       'Stand with the bar over mid-foot, feet hip-width apart.',
       'Hinge at the hips and grip the bar just outside your legs.',
@@ -108,7 +108,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_pullup', name: 'Pull-Up', category: 'strength',
     difficulty: 'intermediate', equipment: ['Pull-up Bar'],
     primaryMuscles: ['lats', 'biceps'], secondaryMuscles: ['rhomboids', 'rear_delts', 'forearms'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=eGo4IYlbE5g',
+    photos: ['https://img.youtube.com/vi/eGo4IYlbE5g/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=eGo4IYlbE5g',
     steps: [
       'Hang from the bar with an overhand grip, slightly wider than shoulders.',
       'Depress your shoulder blades and drive elbows down toward your hips.',
@@ -124,7 +124,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_ohp', name: 'Overhead Press', category: 'strength',
     difficulty: 'intermediate', equipment: ['Barbell'],
     primaryMuscles: ['front_delts'], secondaryMuscles: ['triceps', 'traps'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=qEwKCR5JCog',
+    photos: ['https://img.youtube.com/vi/qEwKCR5JCog/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=qEwKCR5JCog',
     steps: [
       'Grip the bar just outside shoulder-width, wrists stacked over elbows.',
       'Unrack the bar to shoulder level, elbows slightly forward.',
@@ -140,7 +140,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_row', name: 'Barbell Row', category: 'strength',
     difficulty: 'intermediate', equipment: ['Barbell'],
     primaryMuscles: ['lats', 'rhomboids'], secondaryMuscles: ['rear_delts', 'biceps', 'lower_back'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=kBWAon7ItDw',
+    photos: ['https://img.youtube.com/vi/kBWAon7ItDw/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=kBWAon7ItDw',
     steps: [
       'Hinge until your torso is ~45° from horizontal, bar hanging at mid-shin.',
       'Row the bar into your lower sternum, driving elbows past your torso.',
@@ -156,7 +156,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_rdl', name: 'Romanian Deadlift', category: 'strength',
     difficulty: 'intermediate', equipment: ['Barbell'],
     primaryMuscles: ['hamstrings', 'glutes'], secondaryMuscles: ['lower_back', 'forearms'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=JCXUYuzwNrM',
+    photos: ['https://img.youtube.com/vi/JCXUYuzwNrM/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=JCXUYuzwNrM',
     steps: [
       'Stand with the bar in front of you, overhand grip at hip-width.',
       'Hinge at the hips, pushing them back, lowering the bar along your legs.',
@@ -172,7 +172,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_pushup', name: 'Push-Up', category: 'strength',
     difficulty: 'beginner', equipment: ['Bodyweight'],
     primaryMuscles: ['chest', 'triceps'], secondaryMuscles: ['front_delts', 'abs'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=IODxDxX7oi4',
+    photos: ['https://img.youtube.com/vi/IODxDxX7oi4/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=IODxDxX7oi4',
     steps: [
       'Place hands slightly wider than shoulder-width on the floor.',
       'Keep your body in a straight line from head to heels — no sagging hips.',
@@ -188,7 +188,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_curl', name: 'Dumbbell Bicep Curl', category: 'strength',
     difficulty: 'beginner', equipment: ['Dumbbell'],
     primaryMuscles: ['biceps'], secondaryMuscles: ['forearms'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=ykJmrZ5v0Oo',
+    photos: ['https://img.youtube.com/vi/ykJmrZ5v0Oo/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=ykJmrZ5v0Oo',
     steps: [
       'Stand with a dumbbell in each hand, arms fully extended, palms facing forward.',
       'Curl the weights up by flexing at the elbow — keep upper arms stationary.',
@@ -204,7 +204,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_plank', name: 'Plank', category: 'strength',
     difficulty: 'beginner', equipment: ['Bodyweight'],
     primaryMuscles: ['abs'], secondaryMuscles: ['obliques', 'hip_flexors'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=ASdvN_XEl_c',
+    photos: ['https://img.youtube.com/vi/ASdvN_XEl_c/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=ASdvN_XEl_c',
     steps: [
       'Place forearms on the floor, elbows directly under your shoulders.',
       'Lift your hips so your body forms a straight line head to heels.',
@@ -220,7 +220,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_boxjump', name: 'Box Jump', category: 'power',
     difficulty: 'intermediate', equipment: ['Plyometric Box'],
     primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings', 'calves'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=52r4M2bsFmQ',
+    photos: ['https://img.youtube.com/vi/52r4M2bsFmQ/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=52r4M2bsFmQ',
     steps: [
       'Stand facing the box at about arm\'s length away.',
       'Dip into a quarter squat, swinging arms back for momentum.',
@@ -236,7 +236,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_latpulldown', name: 'Lat Pulldown', category: 'strength',
     difficulty: 'beginner', equipment: ['Cable', 'Machine'],
     primaryMuscles: ['lats'], secondaryMuscles: ['biceps', 'rear_delts', 'rhomboids'],
-    photos: [], videoUrl: 'https://www.youtube.com/watch?v=CAwf7n6Luuc',
+    photos: ['https://img.youtube.com/vi/CAwf7n6Luuc/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=CAwf7n6Luuc',
     steps: [
       'Sit at the pulldown station, pad secure over your thighs, grip wide.',
       'Lean back slightly, depress your shoulder blades.',
@@ -962,19 +962,4 @@ function ExerciseDetailView({ exercise: ex, photoIdx, setPhotoIdx, onBack, onSav
         )}
 
         <div className="flex items-center gap-3 bg-[rgba(201,169,110,0.03)] border border-[rgba(201,169,110,0.07)] rounded-2xl px-4 py-3">
-          {ex.authorAvatar
-            ? <img src={ex.authorAvatar} className="w-10 h-10 rounded-full object-cover" />
-            : <div className="w-10 h-10 rounded-full bg-[#c9a96e] flex items-center justify-center text-white font-bold">{ex.authorName?.[0]}</div>
-          }
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-white font-medium text-sm">{ex.authorName}</p>
-              {ex.authorVerified && <BadgeCheck className="w-3.5 h-3.5 text-blue-400" />}
-            </div>
-            <p className="text-white/35 text-xs">Certified Trainer</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+          {ex.authorA

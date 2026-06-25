@@ -147,19 +147,19 @@ function BodySVG({
               opacity={isHovered ? Math.min(opacity + 0.25, 1) : opacity}
               filter={resolvedFilter !== 'none' ? resolvedFilter : undefined}
               transform={m.rotate ? `rotate(${m.rotate} ${m.cx} ${m.cy})` : undefined}
-              style={{ cursor: interactive ? 'pointer' : 'default', transition: 'opacity 0.15s' }}
+              style={{ cursor: interactive ? 'pointer' : (isPrimary || isSecondary) ? 'crosshair' : 'default', transition: 'opacity 0.15s' }}
               onMouseEnter={() => onHover(m.id)}
               onMouseLeave={() => onHover(null)}
               onClick={interactive ? () => onClickMuscle!(m.id) : undefined}
             />
-            {/* Stroke ring on hover when interactive */}
-            {interactive && isHovered && (
+            {/* Stroke ring on hover */}
+            {isHovered && (
               <ellipse
                 cx={m.cx} cy={m.cy} rx={m.rx} ry={m.ry}
                 fill="none"
                 stroke={isPrimary ? '#c9a96e' : isSecondary ? '#34d399' : '#ffffff'}
                 strokeWidth="1.5"
-                opacity="0.7"
+                opacity="0.8"
                 transform={m.rotate ? `rotate(${m.rotate} ${m.cx} ${m.cy})` : undefined}
                 style={{ pointerEvents: 'none' }}
               />
@@ -191,7 +191,7 @@ function BodySVG({
         );
       })}
 
-      {/* Hover tooltip */}
+      {/* Hover tooltip — interactive mode (shows action label) */}
       {interactive && hoveredMuscle && (() => {
         const m = muscles.find(x => x.id === hoveredMuscle);
         if (!m) return null;
@@ -201,12 +201,35 @@ function BodySVG({
         const labelX = Math.min(Math.max(m.cx, 36), 164);
         const labelY = m.cy < 50 ? m.cy + m.ry + 14 : m.cy - m.ry - 6;
         return (
-          <g>
+          <g style={{ pointerEvents: 'none' }}>
             <rect x={labelX - 32} y={labelY - 9} width="64" height="12" rx="3"
               fill="#080608" opacity="0.88" />
             <text x={labelX} y={labelY} textAnchor="middle" fill="#ffffffcc"
               fontSize="8" fontFamily="system-ui" fontWeight="500">
               {nextLabel}
+            </text>
+          </g>
+        );
+      })()}
+
+      {/* Hover tooltip — display-only mode (shows full muscle name) */}
+      {!interactive && hoveredMuscle && (() => {
+        const m = muscles.find(x => x.id === hoveredMuscle);
+        if (!m) return null;
+        const isPrimary   = primaryMuscles.includes(m.id);
+        const isSecondary = secondaryMuscles.includes(m.id);
+        const fullLabel   = ALL_MUSCLES.find(x => x.id === hoveredMuscle)?.label || m.label;
+        const color       = isPrimary ? '#c9a96e' : isSecondary ? '#34d399' : '#ffffffcc';
+        const labelX      = Math.min(Math.max(m.cx, 38), 162);
+        const labelY      = m.cy < 50 ? m.cy + m.ry + 14 : m.cy - m.ry - 6;
+        const boxW        = Math.min(fullLabel.length * 5 + 10, 80);
+        return (
+          <g style={{ pointerEvents: 'none' }}>
+            <rect x={labelX - boxW / 2} y={labelY - 9} width={boxW} height="13" rx="3"
+              fill="#0a0806" opacity="0.92" />
+            <text x={labelX} y={labelY} textAnchor="middle" fill={color}
+              fontSize="8" fontFamily="system-ui" fontWeight="700">
+              {fullLabel}
             </text>
           </g>
         );
@@ -354,36 +377,4 @@ export function MuscleSelector({
         <div className="space-y-1.5">
           {selectedPrimary.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              <span className="text-fuchsia-400/60 text-[10px] self-center">Primary:</span>
-              {selectedPrimary.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => onTogglePrimary(m.id)}
-                  className="px-2 py-0.5 rounded-full bg-fuchsia-500/20 text-fuchsia-300 text-[10px] hover:bg-fuchsia-500/40 transition-all"
-                  title="Click to remove"
-                >
-                  {m.label} ×
-                </button>
-              ))}
-            </div>
-          )}
-          {selectedSecondary.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              <span className="text-emerald-400/60 text-[10px] self-center">Secondary:</span>
-              {selectedSecondary.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => onToggleSecondary(m.id)}
-                  className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 text-[10px] hover:bg-emerald-500/30 transition-all"
-                  title="Click to remove"
-                >
-                  {m.label} ×
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+              <span 
