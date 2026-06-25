@@ -5155,6 +5155,23 @@ app.post('/api/meals', verifyToken, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// DELETE /api/meals/:id — delete a meal (author or admin only)
+app.delete('/api/meals/:id', verifyToken, async (req, res) => {
+  try {
+    const mealRef = db.collection('meals').doc(req.params.id);
+    const snap = await mealRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Meal not found' });
+    const meal = snap.data();
+    const callerSnap = await db.collection('users').doc(req.uid).get();
+    const caller = callerSnap.exists ? callerSnap.data() : {};
+    if (meal.authorId !== req.uid && caller.accountType !== 'admin') {
+      return res.status(403).json({ error: 'Not allowed' });
+    }
+    await mealRef.delete();
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/meals/:id/save — toggle save/unsave a meal
 app.post('/api/meals/:id/save', verifyToken, async (req, res) => {
   try {
@@ -8110,18 +8127,3 @@ setInterval(async () => {
     const http = require('http'), https = require('https');
     const mod = SELF_URL.startsWith('https') ? https : http;
     mod.get(`${SELF_URL}/api/health`, () => {}).on('error', () => {});
-  } catch {}
-}, 10 * 60 * 1000); // every 10 minutes
-
-// GET /api/admin/health — API status + signups today + active recently
-app.get('/api/admin/health', verifyToken, async (req, res) => {
-  try {
-    const userSnap = await db.collection('users').get();
-    const users = userSnap.docs.map(d => d.data());
-    const today = new Date(); today.setHours(0,0,0,0);
-    const signupsToday = users.filter(u => u.createdAt && new Date(u.createdAt) >= today).length;
-    const recentlyActive = users.filter(u => u.lastSeen && (Date.now() - new Date(u.lastSeen).getTime()) < 15 * 60 * 1000).length;
-    res.json({ ok: true, totalUsers: users.length, signupsToday, recentlyActive });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   Search, Bookmark, BookmarkCheck, Plus, X, ChefHat,
   Flame, Zap, Wheat, Droplets, ArrowLeft, PlusCircle,
-  Filter, Star, Clock
+  Filter, Star, Clock, Trash2
 } from 'lucide-react';
 import { authFetch } from '../../utils/authToken';
 import { toast } from 'sonner';
@@ -86,6 +86,7 @@ export function MealsPage({ currentUser, onGoToLog }: MealsPageProps) {
   const [tab, setTab] = useState<'community' | 'saved'>('community');
   const [addingToLog, setAddingToLog] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Add meal form state
   const [form, setForm] = useState({
@@ -134,6 +135,21 @@ export function MealsPage({ currentUser, onGoToLog }: MealsPageProps) {
       toast.error('Could not save meal');
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function deleteMeal(meal: Meal, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDeletingId(meal.id);
+    try {
+      const res = await authFetch(`${API}/meals/${meal.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+      setMeals(prev => prev.filter(m => m.id !== meal.id));
+      toast.success('Meal deleted');
+    } catch {
+      toast.error('Could not delete meal');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -462,6 +478,18 @@ export function MealsPage({ currentUser, onGoToLog }: MealsPageProps) {
                       ? <BookmarkCheck size={14} className="text-emerald-400" />
                       : <Bookmark size={14} className="text-white/70" />}
                   </button>
+                  {/* Delete button — only for the author */}
+                  {currentUser && meal.authorId === currentUser.id && (
+                    <button
+                      onClick={e => deleteMeal(meal, e)}
+                      disabled={deletingId === meal.id}
+                      className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/50 backdrop-blur-sm hover:bg-red-500/70 transition-colors"
+                    >
+                      {deletingId === meal.id
+                        ? <span className="block w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
+                        : <Trash2 size={13} className="text-white/60 hover:text-white" />}
+                    </button>
+                  )}
                 </div>
 
                 <div className="p-4">
