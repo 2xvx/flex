@@ -1217,6 +1217,7 @@ app.get('/api/challenges/mine', verifyToken, async (req, res) => {
   try {
     const snap = await db.collection('challenges')
       .where('participants', 'array-contains', uid)
+      .orderBy('createdAt', 'desc')
       .limit(20)
       .get();
     const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1417,6 +1418,93 @@ app.post('/api/demo-login', async (req, res) => {
         createdAt: new Date().toISOString(),
       });
       console.log(`✅ Created demo ${accountType} account in Firebase`);
+    }
+
+    // ── Seed trainer demo data (once) ──────────────────────────────────────
+    if (accountType === 'trainer') {
+      try {
+        const existingBookings = await db.collection('bookings')
+          .where('trainerId', '==', userRecord.uid).limit(1).get();
+
+        if (existingBookings.empty) {
+          console.log('🌱 Seeding trainer demo data...');
+          const now = Date.now();
+          const day = 86400000;
+
+          // Create 5 fake client user docs
+          const demoClients = [
+            { id: 'demo_client_alex',  displayName: 'Alex Johnson',  username: 'alex_lifts',    avatar: 'https://ui-avatars.com/api/?name=Alex+Johnson&background=0ea5e9&color=fff',  fitnessGoal: 'Build Muscle',   fitnessLevel: 'Intermediate' },
+            { id: 'demo_client_sarah', displayName: 'Sarah Chen',    username: 'sarah_fit',     avatar: 'https://ui-avatars.com/api/?name=Sarah+Chen&background=ec4899&color=fff',   fitnessGoal: 'Lose Weight',    fitnessLevel: 'Beginner'     },
+            { id: 'demo_client_omar',  displayName: 'Omar Hassan',   username: 'omar_gains',    avatar: 'https://ui-avatars.com/api/?name=Omar+Hassan&background=22c55e&color=fff',  fitnessGoal: 'Athletic Perf', fitnessLevel: 'Advanced'     },
+            { id: 'demo_client_emma',  displayName: 'Emma Williams', username: 'emma_wellness', avatar: 'https://ui-avatars.com/api/?name=Emma+Williams&background=a855f7&color=fff', fitnessGoal: 'Tone Up',       fitnessLevel: 'Beginner'     },
+            { id: 'demo_client_james', displayName: 'James Park',    username: 'jpark_run',     avatar: 'https://ui-avatars.com/api/?name=James+Park&background=f59e0b&color=fff',   fitnessGoal: 'Endurance',     fitnessLevel: 'Intermediate' },
+          ];
+          const batch1 = db.batch();
+          demoClients.forEach(c => {
+            batch1.set(db.collection('users').doc(c.id), {
+              ...c, email: `${c.username}@demo.flex`, accountType: 'user',
+              followers: 0, following: 0, workouts: 0, createdAt: new Date(now - 90 * day).toISOString(),
+            });
+          });
+          await batch1.commit();
+
+          // Create bookings
+          const bookingDefs = [
+            { clientId: 'demo_client_alex',  clientName: 'Alex Johnson',  type: 'Strength & Conditioning', date: new Date(now + 2 * day).toISOString(),  time: '09:00', status: 'confirmed',  price: 65 },
+            { clientId: 'demo_client_sarah', clientName: 'Sarah Chen',    type: 'Weight Loss Coaching',    date: new Date(now + 3 * day).toISOString(),  time: '11:00', status: 'confirmed',  price: 55 },
+            { clientId: 'demo_client_omar',  clientName: 'Omar Hassan',   type: 'Advanced Powerlifting',   date: new Date(now + 5 * day).toISOString(),  time: '07:00', status: 'pending',    price: 80 },
+            { clientId: 'demo_client_emma',  clientName: 'Emma Williams', type: 'Mobility & Wellness',     date: new Date(now + 7 * day).toISOString(),  time: '10:00', status: 'confirmed',  price: 50 },
+            { clientId: 'demo_client_james', clientName: 'James Park',    type: 'Endurance Training',      date: new Date(now - 3 * day).toISOString(),  time: '08:00', status: 'completed',  price: 60 },
+            { clientId: 'demo_client_alex',  clientName: 'Alex Johnson',  type: 'Strength & Conditioning', date: new Date(now - 7 * day).toISOString(),  time: '09:00', status: 'completed',  price: 65 },
+            { clientId: 'demo_client_sarah', clientName: 'Sarah Chen',    type: 'Weight Loss Coaching',    date: new Date(now - 10 * day).toISOString(), time: '11:00', status: 'completed',  price: 55 },
+            { clientId: 'demo_client_omar',  clientName: 'Omar Hassan',   type: 'Advanced Powerlifting',   date: new Date(now - 14 * day).toISOString(), time: '07:00', status: 'completed',  price: 80 },
+          ];
+          const batch2 = db.batch();
+          bookingDefs.forEach(b => {
+            batch2.set(db.collection('bookings').doc(), {
+              ...b, trainerId: userRecord.uid, trainerName: 'Demo Trainer',
+              durationMin: 60, notes: '', createdAt: new Date().toISOString(),
+            });
+          });
+          await batch2.commit();
+
+          // Create session notes
+          const noteDefs = [
+            { clientId: 'demo_client_alex',  clientName: 'Alex Johnson',  sessionDate: new Date(now - 7 * day).toISOString().slice(0,10),  content: 'Alex hit a new squat PR at 120kg today — great depth and control. Focus next session on paused reps for additional strength gains. Diet is on point, recovery could improve (sleep 6hrs avg).' },
+            { clientId: 'demo_client_sarah', clientName: 'Sarah Chen',    sessionDate: new Date(now - 10 * day).toISOString().slice(0,10), content: 'Sarah is progressing well on caloric deficit. Added 15 mins LISS cardio post-session. Weight down 1.2kg this month. Energy levels are good — slight form breakdown on RDL at fatigue, cueing to be addressed next session.' },
+            { clientId: 'demo_client_omar',  clientName: 'Omar Hassan',   sessionDate: new Date(now - 14 * day).toISOString().slice(0,10), content: 'Omar deadlifted 200kg for a triple — huge milestone. Technique was clean through all 3 reps. Programming moving to 85%+ intensity next block. Needs more thoracic mobility work.' },
+            { clientId: 'demo_client_james', clientName: 'James Park',    sessionDate: new Date(now - 3 * day).toISOString().slice(0,10),  content: '10km tempo run at 4:45/km pace — endurance improving significantly. VO2 zones looking good. Introduced strength circuit 2× per week to build run economy. Upcoming half-marathon target: sub-1:45.' },
+          ];
+          const batch3 = db.batch();
+          noteDefs.forEach(n => {
+            batch3.set(db.collection('sessionNotes').doc(), {
+              ...n, trainerId: userRecord.uid, createdAt: new Date().toISOString(),
+            });
+          });
+
+          // Set availability blocks + profile enrichment
+          batch3.update(db.collection('users').doc(userRecord.uid), {
+            specialty: 'Strength & Conditioning',
+            bio: 'NSCA-certified strength coach with 8 years experience. Specialist in powerlifting, athletic performance, and body recomposition. 200+ clients transformed. 💪',
+            location: 'London, UK',
+            followers: 142,
+            workouts: 847,
+            'trainerInfo.availabilityBlocks': [
+              { day: 1, slots: [{ start: '07:00', end: '13:00' }] },
+              { day: 2, slots: [{ start: '07:00', end: '13:00' }] },
+              { day: 3, slots: [{ start: '07:00', end: '13:00' }] },
+              { day: 4, slots: [{ start: '07:00', end: '13:00' }] },
+              { day: 5, slots: [{ start: '07:00', end: '11:00' }] },
+            ],
+            'trainerInfo.hourlyRate': 65,
+            'trainerInfo.currency': 'GBP',
+          });
+          await batch3.commit();
+          console.log('✅ Trainer demo data seeded');
+        }
+      } catch (seedErr) {
+        console.warn('Trainer seed warning (non-fatal):', seedErr.message);
+      }
     }
 
     // Fetch the Firestore profile
@@ -2477,7 +2565,7 @@ app.get('/api/trainer/notes', verifyToken, async (req, res) => {
   try {
     let q = db.collection('sessionNotes').where('trainerId', '==', req.uid);
     if (clientId) q = q.where('clientId', '==', String(clientId));
-    const snap = await q.limit(50).get();
+    const snap = await q.orderBy('createdAt', 'desc').limit(50).get();
     res.json({ notes: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -3993,12 +4081,8 @@ app.get('/api/progress/:uid', verifyToken, async (req, res) => {
   try {
     const snap = await db.collection('progressPhotos')
       .where('userId','==', req.params.uid)
-      .limit(50).get();
-    const photos = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 30);
-    res.json({ photos });
+      .orderBy('createdAt','desc').limit(30).get();
+    res.json({ photos: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4122,11 +4206,12 @@ app.post('/api/auth/verify-otp', verifyToken, async (req, res) => {
     if (!doc.exists) return res.status(400).json({ error: 'No code found — request a new one.' });
 
     const { code: stored, expiresAt } = doc.data();
+    console.log('[verify-otp] uid:', uid, '| submitted:', JSON.stringify(code), '| stored:', JSON.stringify(stored));
     if (new Date() > new Date(expiresAt)) {
       await doc.ref.delete();
       return res.status(400).json({ error: 'Code expired — request a new one.' });
     }
-    if (code.trim() !== stored) {
+    if (String(code).trim() !== String(stored).trim()) {
       return res.status(400).json({ error: 'Incorrect code — please try again.' });
     }
 
@@ -4626,7 +4711,7 @@ app.get('/api/exercises', async (req, res) => {
     let query = db.collection('exercises');
     if (category)   query = query.where('category', '==', category);
     if (difficulty) query = query.where('difficulty', '==', difficulty);
-    const snap = await query.limit(50).get();
+    const snap = await query.orderBy('createdAt', 'desc').limit(50).get();
     let exercises = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     // Text search client-side (Firestore free tier has no full-text)
     if (q) {
@@ -5126,7 +5211,7 @@ function broadcastToStream(streamId, data) {
 // GET /api/livestreams — all active streams
 app.get('/api/livestreams', async (req, res) => {
   try {
-    const snap = await db.collection('livestreams').where('status', '==', 'live').get();
+    const snap = await db.collection('livestreams').where('status', '==', 'live').orderBy('startedAt', 'desc').get();
     res.json({ streams: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -5346,7 +5431,7 @@ app.get('/api/users/:uid/integrations/health-data', verifyToken, verifyOwner, as
     const { type, from, to } = req.query;
     let query = db.collection('users').doc(req.params.uid).collection('healthData');
     if (type) query = query.where('type', '==', type);
-    const snap = await query.limit(100).get();
+    const snap = await query.orderBy('date', 'desc').limit(100).get();
     res.json({ data: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -5445,25 +5530,6 @@ app.patch('/api/users/:uid/workout-status', verifyToken, async (req, res) => {
     await db.collection('users').doc(req.params.uid).update(update);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ── Missing routes that frontend calls ───────────────────────────────────────
-// Track post views (frontend calls this when a post enters viewport)
-app.post('/api/posts/:id/view', async (req, res) => {
-  try {
-    await db.collection('posts').doc(req.params.id).update({
-      views: admin.firestore.FieldValue.increment(1),
-    });
-    res.json({ ok: true });
-  } catch { res.json({ ok: true }); } // silently ignore if post doesn't exist
-});
-
-// ── Crash guard — prevent unhandled rejections from killing the process ──────
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled rejection (ignored):', reason);
-});
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception (ignored):', err.message);
 });
 
 app.listen(PORT, () => console.log(`Flex API running on port ${PORT}`));
@@ -5753,7 +5819,8 @@ app.get('/api/users/:uid/trainer/clients', verifyToken, verifyOwner, async (req,
     const clients = await Promise.all(clientIds.map(async clientId => {
       const [userSnap, workoutsSnap] = await Promise.all([
         db.collection('users').doc(clientId).get(),
-        db.collection('posts').where('user.id', '==', clientId).limit(5).get().catch(() => ({ size: 0, docs: [] })),
+        db.collection('posts').where('user.id', '==', clientId)
+          .orderBy('createdAt', 'desc').limit(5).get().catch(() => ({ size: 0, docs: [] })),
       ]);
       if (!userSnap.exists) return null;
       const u = userSnap.data();
@@ -5883,7 +5950,8 @@ app.get('/api/communities/:id/feed', verifyToken, async (req, res) => {
     for (const chunk of chunks) {
       const snap = await db.collection('posts')
         .where('user.id', 'in', chunk)
-        .limit(100)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
         .get();
       snap.docs.forEach(d => allPosts.push({ id: d.id, ...d.data() }));
     }
@@ -5976,7 +6044,7 @@ app.get('/api/accountability/my-pair', verifyToken, async (req, res) => {
         const p = pSnap.data();
         pair.partner = { uid: partnerId, name: p.displayName || p.name || 'User', avatar: p.avatar || '', username: p.username || '', fitnessGoal: p.fitnessGoal || '' };
         // Last workout
-        const wSnap = await db.collection('posts').where('user.id', '==', partnerId).limit(10).get();
+        const wSnap = await db.collection('posts').where('user.id', '==', partnerId).orderBy('createdAt', 'desc').limit(1).get();
         pair.partner.lastWorkout = wSnap.empty ? null : (wSnap.docs[0].data().createdAt || null);
       }
     }
@@ -6591,7 +6659,7 @@ app.get('/api/gyms/:id/stats', verifyToken, async (req, res) => {
     // Check-ins this week (last 7 days)
     const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
     const checkinsWeek = await db.collection('gyms').doc(gymId).collection('checkins')
-      .where('checkedInAt', '>=', weekAgo.toISOString()).get();
+      .where('checkedInAt', '>=', weekAgo.toISOString()).orderBy('checkedInAt').get();
 
     // Build daily check-in counts for chart
     const dailyCounts = {};
@@ -7588,12 +7656,10 @@ app.get('/api/train-together/invites', verifyToken, async (req, res) => {
   try {
     const snap = await db.collection('users').doc(req.uid).collection('trainInvites')
       .where('status', '==', 'pending')
-      .limit(20)
+      .orderBy('createdAt', 'desc')
+      .limit(10)
       .get();
-    const invites = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 10);
+    const invites = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     res.json({ invites });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -8021,4 +8087,41 @@ app.post('/api/train-together/pacts/:id/sign', verifyToken, async (req, res) => 
     if (!signedBy.includes(req.uid)) signedBy.push(req.uid);
     const bothSigned = signedBy.includes(data.createdBy) && signedBy.includes(data.partnerUid);
     await ref.update({ signedBy, status: bothSigned ? 'active' : 'pending' });
-    res.json({ ok: true, status: bothSigned ? 'active' : 'p
+    res.json({ ok: true, status: bothSigned ? 'active' : 'pending' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/train-together/pacts/:id/decline — decline a pact
+app.post('/api/train-together/pacts/:id/decline', verifyToken, async (req, res) => {
+  try {
+    const ref = db.collection('pacts').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Pact not found' });
+    await ref.update({ status: 'declined', declinedBy: req.uid, declinedAt: new Date().toISOString() });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── KEEP-ALIVE — prevents Render free tier from sleeping ─────────────────────
+// Pings itself every 10 minutes so cold-start delay doesn't hit users
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
+setInterval(async () => {
+  try {
+    const http = require('http'), https = require('https');
+    const mod = SELF_URL.startsWith('https') ? https : http;
+    mod.get(`${SELF_URL}/api/health`, () => {}).on('error', () => {});
+  } catch {}
+}, 10 * 60 * 1000); // every 10 minutes
+
+// GET /api/admin/health — API status + signups today + active recently
+app.get('/api/admin/health', verifyToken, async (req, res) => {
+  try {
+    const userSnap = await db.collection('users').get();
+    const users = userSnap.docs.map(d => d.data());
+    const today = new Date(); today.setHours(0,0,0,0);
+    const signupsToday = users.filter(u => u.createdAt && new Date(u.createdAt) >= today).length;
+    const recentlyActive = users.filter(u => u.lastSeen && (Date.now() - new Date(u.lastSeen).getTime()) < 15 * 60 * 1000).length;
+    res.json({ ok: true, totalUsers: users.length, signupsToday, recentlyActive });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+

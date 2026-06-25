@@ -724,7 +724,37 @@ export function Login({ onLogin, onSwitchToSignUp, onDemoLogin }: LoginProps) {
 
             {/* Footer links */}
             <div style={{ marginTop: "auto", paddingTop: 24 }}>
-              <div style={{ height: 0.5, background: `rgba(255,255,255,0.04)`, marginBottom: 20 }} />
+              <div style={{ height: 0.5, background: `rgba(255,255,255,0.04)`, marginBottom: 16 }} />
+
+              {/* Demo login buttons */}
+              <p style={{ fontSize: 8, letterSpacing: 3, textTransform: "uppercase", color: `rgba(201,169,110,0.3)`, textAlign: "center", marginBottom: 10 }}>
+                Try a demo account
+              </p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                {([
+                  { type: "user",    label: "User",    color: "rgba(14,165,233,0.15)",  border: "rgba(14,165,233,0.3)",  text: "#38bdf8" },
+                  { type: "trainer", label: "Trainer", color: "rgba(249,115,22,0.15)",  border: "rgba(249,115,22,0.35)", text: "#fb923c" },
+                  { type: "admin",   label: "Admin",   color: "rgba(168,85,247,0.15)",  border: "rgba(168,85,247,0.3)", text: "#c084fc" },
+                ] as const).map(({ type, label, color, border, text }) => (
+                  <button
+                    key={type}
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => { onDemoLogin(type); }}
+                    style={{
+                      flex: 1, height: 34, background: color,
+                      border: `0.5px solid ${border}`, borderRadius: 2,
+                      cursor: "pointer", fontSize: 8, letterSpacing: 2,
+                      textTransform: "uppercase", color: text,
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ height: 0.5, background: `rgba(255,255,255,0.04)`, marginBottom: 16 }} />
               <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
                 <button type="button" onClick={onSwitchToSignUp} style={{
                   background: "none", border: "none", cursor: "pointer",
