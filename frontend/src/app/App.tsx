@@ -270,6 +270,13 @@ export default function App() {
     navigateTo("feed");
   };
 
+  const handleOTPBack = () => {
+    localStorage.removeItem('pendingOTPEmail');
+    signOut();
+    setPendingOTP(null);
+    setIsAuthenticated(false);
+  };
+
   const handleLogout = async () => {
     try {
       if (currentUser) await removePushToken(currentUser.id).catch(() => {});
@@ -295,7 +302,7 @@ export default function App() {
         <OTPVerifyScreen
           email={pendingOTP.maskedEmail}
           onVerified={handleOTPVerified}
-          // onSkip removed — email verification is mandatory
+          onBack={handleOTPBack}
         />
       </>
     );
@@ -457,7 +464,7 @@ export default function App() {
 
           {/* ── Train ── */}
           {currentView === "train" && (
-            <TrainPage currentUser={currentUser} />
+            <TrainPage currentUser={currentUser} onOpenDM={() => navigateTo("community")} />
           )}
 
           {/* ── Health ── */}
@@ -611,11 +618,4 @@ export default function App() {
       {currentUser && currentView === "feed" && (
         <OnboardingChecklist
           userId={currentUser.id}
-          onNavigate={navigateTo}
-          onNewPost={() => setIsCreatePostOpen(true)}
-        />
-      )}
-
-    </div>
-  );
-}
+  

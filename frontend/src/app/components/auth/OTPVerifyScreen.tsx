@@ -7,10 +7,11 @@ import { toast } from 'sonner';
 interface Props {
   email: string;          // masked email shown to user
   onVerified: () => void; // called when code checks out
+  onBack?: () => void;    // go back to login
   onSkip?: () => void;    // escape hatch (optional)
 }
 
-export function OTPVerifyScreen({ email, onVerified, onSkip }: Props) {
+export function OTPVerifyScreen({ email, onVerified, onBack, onSkip }: Props) {
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(true);
@@ -104,6 +105,22 @@ export function OTPVerifyScreen({ email, onVerified, onSkip }: Props) {
         background: 'rgba(255,255,255,0.03)', border: '0.5px solid rgba(255,255,255,0.08)',
         borderRadius: 28, padding: '40px 32px', textAlign: 'center',
       }}>
+        {/* Back button */}
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 20,
+              padding: 0,
+            }}
+          >
+            ← Back to login
+          </button>
+        )}
+
         {/* Icon */}
         <div style={{
           width: 64, height: 64, borderRadius: 20,
@@ -187,24 +204,4 @@ export function OTPVerifyScreen({ email, onVerified, onSkip }: Props) {
                 disabled={sending}
                 style={{ background: 'none', border: 'none', color: G1, cursor: 'pointer', fontSize: 13, fontWeight: 500, padding: 0 }}
               >
-                {sending ? 'Sending…' : 'Resend code'}
-              </button>
-            )}
-          </p>
-        </form>
-
-        {/* Skip link for edge cases */}
-        {onSkip && (
-          <button
-            onClick={onSkip}
-            style={{ marginTop: 24, background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: 12, cursor: 'pointer' }}
-          >
-            Skip for now
-          </button>
-        )}
-      </div>
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
+                {sending ? 'Sending
