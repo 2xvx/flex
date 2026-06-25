@@ -172,7 +172,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_pushup', name: 'Push-Up', category: 'strength',
     difficulty: 'beginner', equipment: ['Bodyweight'],
     primaryMuscles: ['chest', 'triceps'], secondaryMuscles: ['front_delts', 'abs'],
-    photos: ['https://img.youtube.com/vi/IODxDxX7oi4/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=IODxDxX7oi4',
+    photos: ['https://images.unsplash.com/photo-1598971457999-ca4ef48a9a71?w=800&q=80&fit=crop'], videoUrl: 'https://www.youtube.com/watch?v=IODxDxX7oi4',
     steps: [
       'Place hands slightly wider than shoulder-width on the floor.',
       'Keep your body in a straight line from head to heels — no sagging hips.',
@@ -204,7 +204,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_plank', name: 'Plank', category: 'strength',
     difficulty: 'beginner', equipment: ['Bodyweight'],
     primaryMuscles: ['abs'], secondaryMuscles: ['obliques', 'hip_flexors'],
-    photos: ['https://img.youtube.com/vi/ASdvN_XEl_c/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=ASdvN_XEl_c',
+    photos: ['https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80&fit=crop'], videoUrl: 'https://www.youtube.com/watch?v=ASdvN_XEl_c',
     steps: [
       'Place forearms on the floor, elbows directly under your shoulders.',
       'Lift your hips so your body forms a straight line head to heels.',
@@ -220,7 +220,7 @@ const DEMO_EXERCISES: Exercise[] = [
     id: 'demo_boxjump', name: 'Box Jump', category: 'power',
     difficulty: 'intermediate', equipment: ['Plyometric Box'],
     primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings', 'calves'],
-    photos: ['https://img.youtube.com/vi/52r4M2bsFmQ/maxresdefault.jpg'], videoUrl: 'https://www.youtube.com/watch?v=52r4M2bsFmQ',
+    photos: ['https://images.unsplash.com/photo-1599058917765-a780eda07a3e?w=800&q=80&fit=crop'], videoUrl: 'https://www.youtube.com/watch?v=52r4M2bsFmQ',
     steps: [
       'Stand facing the box at about arm\'s length away.',
       'Dip into a quarter squat, swinging arms back for momentum.',
@@ -721,7 +721,15 @@ function ExerciseCard({ exercise: ex, onOpen, onSave }: {
         >
           {ex.photos[0] && (
             <img src={ex.photos[0]} alt={ex.name}
-              className={`w-full h-full object-cover transition-all duration-500 ${videoHovered ? 'opacity-0 scale-105' : 'group-hover:scale-105'}`} />
+              className={`w-full h-full object-cover transition-all duration-500 ${videoHovered ? 'opacity-0 scale-105' : 'group-hover:scale-105'}`}
+              onError={e => {
+                const src = ex.photos[0];
+                // YouTube maxresdefault → hqdefault fallback
+                if (src.includes('maxresdefault')) {
+                  (e.target as HTMLImageElement).src = src.replace('maxresdefault', 'hqdefault');
+                }
+              }}
+            />
           )}
           {hasVideo && videoHovered && isDirectVideo(ex.videoUrl) && (
             <div className="absolute inset-0">
@@ -953,13 +961,4 @@ function ExerciseDetailView({ exercise: ex, photoIdx, setPhotoIdx, onBack, onSav
 
         {ex.trainerTip && (
           <div className="bg-gradient-to-br from-[rgba(201,169,110,0.06)] to-[rgba(201,169,110,0.03)] border border-[#c9a96e]/25 rounded-2xl px-4 py-4 flex gap-3">
-            <Lightbulb className="w-5 h-5 text-[#c9a96e] shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[#e8c98a] text-xs font-semibold mb-1">Trainer's tip</p>
-              <p className="text-white/70 text-sm leading-relaxed">{ex.trainerTip}</p>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-3 bg-[rgba(201,169,110,0.03)] border border-[rgba(201,169,110,0.07)] rounded-2xl px-4 py-3">
-          {ex.authorA
+            <Lightbulb className="w-5 h-5 text-[#c9a96e] shrink-0 mt-0.5" 
