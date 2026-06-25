@@ -22,6 +22,51 @@ import { API } from '../../config';
 
 interface Props { currentUser: User; onNavigate?: (view: string) => void; }
 
+// ── Demo trainer detection ────────────────────────────────────────────────────
+const DEMO_TRAINER_EMAIL = 'demo.trainer@fitconnect.com';
+const now = Date.now();
+const d = (days: number) => new Date(now + days * 86400000).toISOString();
+
+const DEMO_CLIENTS = [
+  { id: 'demo_client_alex',  displayName: 'Alex Johnson',  username: 'alex_lifts',    avatar: 'https://ui-avatars.com/api/?name=Alex+Johnson&background=0ea5e9&color=fff',  fitnessGoal: 'Build Muscle',   fitnessLevel: 'Intermediate', totalBookings: 12, recentWorkouts: 8, lastBookingDate: d(-2) },
+  { id: 'demo_client_sarah', displayName: 'Sarah Chen',    username: 'sarah_fit',     avatar: 'https://ui-avatars.com/api/?name=Sarah+Chen&background=ec4899&color=fff',   fitnessGoal: 'Lose Weight',    fitnessLevel: 'Beginner',     totalBookings: 7,  recentWorkouts: 5, lastBookingDate: d(-1) },
+  { id: 'demo_client_omar',  displayName: 'Omar Hassan',   username: 'omar_gains',    avatar: 'https://ui-avatars.com/api/?name=Omar+Hassan&background=22c55e&color=fff',  fitnessGoal: 'Athletic Perf', fitnessLevel: 'Advanced',     totalBookings: 18, recentWorkouts: 6, lastBookingDate: d(-3) },
+  { id: 'demo_client_emma',  displayName: 'Emma Williams', username: 'emma_wellness', avatar: 'https://ui-avatars.com/api/?name=Emma+Williams&background=a855f7&color=fff', fitnessGoal: 'Tone Up',       fitnessLevel: 'Beginner',     totalBookings: 4,  recentWorkouts: 3, lastBookingDate: d(-5) },
+  { id: 'demo_client_james', displayName: 'James Park',    username: 'jpark_run',     avatar: 'https://ui-avatars.com/api/?name=James+Park&background=f59e0b&color=fff',   fitnessGoal: 'Endurance',     fitnessLevel: 'Intermediate', totalBookings: 9,  recentWorkouts: 7, lastBookingDate: d(-1) },
+];
+
+const DEMO_BOOKINGS = [
+  { id: 'db1', clientName: 'Alex Johnson',  sessionType: 'Strength & Conditioning', date: d(2).slice(0,10),  timeSlot: '09:00', status: 'confirmed',  price: 65, notes: 'Focus on squat mechanics and accessory work.' },
+  { id: 'db2', clientName: 'Sarah Chen',    sessionType: 'Weight Loss Coaching',    date: d(3).slice(0,10),  timeSlot: '11:00', status: 'confirmed',  price: 55, notes: 'Cardio + HIIT circuit. Keep HR in zone 3.' },
+  { id: 'db3', clientName: 'Omar Hassan',   sessionType: 'Advanced Powerlifting',   date: d(5).slice(0,10),  timeSlot: '07:00', status: 'pending',    price: 80, notes: 'Requesting extra session before competition.' },
+  { id: 'db4', clientName: 'Emma Williams', sessionType: 'Mobility & Wellness',     date: d(7).slice(0,10),  timeSlot: '10:00', status: 'confirmed',  price: 50, notes: 'Hip mobility, breathwork, and yoga flow.' },
+  { id: 'db5', clientName: 'James Park',    sessionType: 'Endurance Training',      date: d(-1).slice(0,10), timeSlot: '08:00', status: 'completed',  price: 60, notes: 'Tempo run + lactate threshold work.' },
+  { id: 'db6', clientName: 'Alex Johnson',  sessionType: 'Strength & Conditioning', date: d(-7).slice(0,10), timeSlot: '09:00', status: 'completed',  price: 65, notes: 'Deadlift day — hit 5×5 at 160kg.' },
+  { id: 'db7', clientName: 'Sarah Chen',    sessionType: 'Weight Loss Coaching',    date: d(-10).slice(0,10),timeSlot: '11:00', status: 'completed',  price: 55 },
+  { id: 'db8', clientName: 'Omar Hassan',   sessionType: 'Advanced Powerlifting',   date: d(-14).slice(0,10),timeSlot: '07:00', status: 'completed',  price: 80 },
+];
+
+const DEMO_NOTES = [
+  { id: 'dn1', clientId: 'demo_client_alex',  clientName: 'Alex Johnson',  sessionDate: d(-7).slice(0,10),  content: 'Alex hit a new squat PR at 120kg today — great depth and control. Focus next session on paused reps for additional strength gains. Diet is on point, recovery could improve (sleep 6hrs avg). Recommend magnesium supplementation.', createdAt: d(-7) },
+  { id: 'dn2', clientId: 'demo_client_sarah', clientName: 'Sarah Chen',    sessionDate: d(-10).slice(0,10), content: 'Sarah is progressing well on caloric deficit. Added 15 mins LISS cardio post-session. Weight down 1.2kg this month. Energy levels are good — slight form breakdown on RDL at fatigue, cueing to be addressed next session.', createdAt: d(-10) },
+  { id: 'dn3', clientId: 'demo_client_omar',  clientName: 'Omar Hassan',   sessionDate: d(-14).slice(0,10), content: 'Omar deadlifted 200kg for a triple — huge milestone. Technique was clean through all 3 reps. Programming moving to 85%+ intensity next block. Needs more thoracic mobility work. Next cycle: peak for IPF regional qualifier.', createdAt: d(-14) },
+  { id: 'dn4', clientId: 'demo_client_james', clientName: 'James Park',    sessionDate: d(-1).slice(0,10),  content: '10km tempo run at 4:45/km pace — endurance improving significantly. VO2 zones looking great. Introduced strength circuit 2× per week to build run economy. Target: sub-1:45 half-marathon in 6 weeks. On track.', createdAt: d(-1) },
+];
+
+const DEMO_EARNINGS = {
+  totalRevenue: 2840,
+  marketplaceRevenue: 420,
+  totalSessions: 41,
+  monthlyData: [
+    { month: '2026-01', revenue: 320 },
+    { month: '2026-02', revenue: 480 },
+    { month: '2026-03', revenue: 390 },
+    { month: '2026-04', revenue: 560 },
+    { month: '2026-05', revenue: 670 },
+    { month: '2026-06', revenue: 420 },
+  ],
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function daysSince(iso: string | null | undefined): number {
   if (!iso) return 999;
@@ -137,14 +182,16 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 // CLIENTS TAB — progress dashboard + assign programs
 // ════════════════════════════════════════════════════════════════════════════════
 function ClientsTab({ currentUser, onNavigate }: { currentUser: User; onNavigate?: (v: string) => void }) {
-  const [clients, setClients]     = useState<any[]>([]);
+  const isDemo = currentUser.email === DEMO_TRAINER_EMAIL;
+  const [clients, setClients]     = useState<any[]>(isDemo ? DEMO_CLIENTS : []);
   const [programs, setPrograms]   = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading]     = useState(!isDemo);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [assignNote, setAssignNote]   = useState('');
   const [selectedProg, setSelectedProg] = useState('');
 
   useEffect(() => {
+    if (isDemo) return;
     Promise.all([
       authFetch(`${API}/users/${currentUser.id}/trainer/clients`).then(r => r.json()),
       authFetch(`${API}/programs/mine`).then(r => r.json()),
@@ -153,7 +200,7 @@ function ClientsTab({ currentUser, onNavigate }: { currentUser: User; onNavigate
       setPrograms(p.programs || []);
     }).catch(() => toast.error('Failed to load clients'))
     .finally(() => setLoading(false));
-  }, [currentUser.id]);
+  }, [currentUser.id, isDemo]);
 
   const handleAssign = async (clientId: string) => {
     if (!selectedProg) { toast.error('Select a program first'); return; }
@@ -265,18 +312,20 @@ function ClientsTab({ currentUser, onNavigate }: { currentUser: User; onNavigate
 // BOOKINGS TAB — accept/decline with message
 // ════════════════════════════════════════════════════════════════════════════════
 function BookingsTab({ currentUser }: { currentUser: User }) {
-  const [bookings,    setBookings]    = useState<any[]>([]);
-  const [loading,     setLoading]     = useState(true);
+  const isDemo = currentUser.email === DEMO_TRAINER_EMAIL;
+  const [bookings,    setBookings]    = useState<any[]>(isDemo ? DEMO_BOOKINGS : []);
+  const [loading,     setLoading]     = useState(!isDemo);
   const [responding,  setResponding]  = useState<string | null>(null);
   const [respMsg,     setRespMsg]     = useState('');
   const [filter,      setFilter]      = useState<'pending' | 'confirmed' | 'completed' | 'cancelled'>('pending');
 
   const load = useCallback(async () => {
+    if (isDemo) return;
     const res = await authFetch(`${API}/users/${currentUser.id}/bookings?role=trainer`);
     const data = await res.json();
     setBookings(Array.isArray(data) ? data : []);
     setLoading(false);
-  }, [currentUser.id]);
+  }, [currentUser.id, isDemo]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -481,15 +530,17 @@ function CalendarTab({ currentUser }: { currentUser: User }) {
 // EARNINGS TAB — monthly revenue chart
 // ════════════════════════════════════════════════════════════════════════════════
 function EarningsTab({ currentUser }: { currentUser: User }) {
-  const [data, setData]     = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const isDemo = currentUser.email === DEMO_TRAINER_EMAIL;
+  const [data, setData]     = useState<any>(isDemo ? DEMO_EARNINGS : null);
+  const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
+    if (isDemo) return;
     authFetch(`${API}/users/${currentUser.id}/trainer/earnings`)
       .then(r => r.json()).then(d => setData(d))
       .catch(() => toast.error('Failed to load earnings'))
       .finally(() => setLoading(false));
-  }, [currentUser.id]);
+  }, [currentUser.id, isDemo]);
 
   if (loading) return <Loader className="py-20" />;
   if (!data) return <Empty icon={<DollarSign className="w-8 h-8" />} text="No earnings data yet" />;
@@ -540,9 +591,10 @@ function EarningsTab({ currentUser }: { currentUser: User }) {
 // NOTES TAB — private session notes per client
 // ════════════════════════════════════════════════════════════════════════════════
 function NotesTab({ currentUser }: { currentUser: User }) {
-  const [notes,    setNotes]    = useState<any[]>([]);
-  const [clients,  setClients]  = useState<any[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const isDemo = currentUser.email === DEMO_TRAINER_EMAIL;
+  const [notes,    setNotes]    = useState<any[]>(isDemo ? DEMO_NOTES : []);
+  const [clients,  setClients]  = useState<any[]>(isDemo ? DEMO_CLIENTS : []);
+  const [loading,  setLoading]  = useState(!isDemo);
   const [showNew,  setShowNew]  = useState(false);
   const [editing,  setEditing]  = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -551,6 +603,7 @@ function NotesTab({ currentUser }: { currentUser: User }) {
   const [filterClient, setFilterClient] = useState('all');
 
   const load = useCallback(async () => {
+    if (isDemo) return;
     const [n, c] = await Promise.all([
       authFetch(`${API}/trainer/notes`).then(r => r.json()),
       authFetch(`${API}/users/${currentUser.id}/trainer/clients`).then(r => r.json()),
@@ -558,7 +611,7 @@ function NotesTab({ currentUser }: { currentUser: User }) {
     setNotes(n.notes || []);
     setClients(c.clients || []);
     setLoading(false);
-  }, [currentUser.id]);
+  }, [currentUser.id, isDemo]);
 
   useEffect(() => { load(); }, [load]);
 
