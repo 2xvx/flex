@@ -507,14 +507,19 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
     } catch { toast.error('Could not open conversation'); }
   };
 
-  // ── Auto-open DM from trainer client list ─────────────────────────────────
+  // ── Auto-open DM (trainer client list or Pull In) ────────────────────────
   useEffect(() => {
     const raw = sessionStorage.getItem('openDmWith');
     if (!raw) return;
     sessionStorage.removeItem('openDmWith');
+    const prefill = sessionStorage.getItem('openDmPrefill') || '';
+    sessionStorage.removeItem('openDmPrefill');
     try {
       const target = JSON.parse(raw);
-      if (target?.id) startDM(target.id);
+      if (target?.id) {
+        startDM(target.id);
+        if (prefill) setTimeout(() => setText(prefill), 600);
+      }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
