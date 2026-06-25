@@ -322,7 +322,7 @@ export function NutritionPage({ currentUser }: NutritionPageProps) {
             ) : (
               <div className="border-t border-[rgba(201,169,110,0.08)]">
                 {entries.map(e => (
-                  <div key={e.id} className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors group">
+                  <div key={e.id} className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
                     <div className="flex-1 min-w-0">
                       <p className="text-white/80 text-sm truncate">{e.name}</p>
                       <div className="flex gap-2 mt-0.5">
@@ -333,7 +333,7 @@ export function NutritionPage({ currentUser }: NutritionPageProps) {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="text-white font-semibold text-sm">{e.calories}</span>
-                      <button onClick={() => removeEntry(e.id)} className="text-white/10 group-hover:text-red-400/60 hover:!text-red-400 transition-colors">
+                      <button onClick={() => removeEntry(e.id)} className="text-red-400/40 hover:text-red-400 active:text-red-500 transition-colors">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>

@@ -164,6 +164,29 @@ function BodySVG({
                 style={{ pointerEvents: 'none' }}
               />
             )}
+            {/* Permanent name label for highlighted muscles (display-only mode) */}
+            {!interactive && (isPrimary || isSecondary) && (() => {
+              // Only render label for the first occurrence of each muscle id
+              const firstOccurrence = muscles.findIndex(x => x.id === m.id);
+              if (muscles.indexOf(m) !== firstOccurrence) return null;
+              // For paired muscles use the center x=100, otherwise use the muscle's cx
+              const allOccurrences = muscles.filter(x => x.id === m.id);
+              const avgCx = allOccurrences.reduce((s, x) => s + x.cx, 0) / allOccurrences.length;
+              const avgCy = allOccurrences.reduce((s, x) => s + x.cy, 0) / allOccurrences.length;
+              // Clamp to body silhouette area
+              const labelX = Math.min(Math.max(avgCx, 20), 180);
+              const labelY = avgCy + 2.5;
+              const color = isPrimary ? '#c9a96e' : '#34d399';
+              // Shorten label if too long
+              const label = m.label.length > 9 ? m.label.substring(0, 8) : m.label;
+              return (
+                <text key={`lbl_${m.id}`} x={labelX} y={labelY} textAnchor="middle"
+                  fill={color} fontSize="7" fontFamily="system-ui" fontWeight="700"
+                  style={{ pointerEvents: 'none' }} opacity="0.95">
+                  {label}
+                </text>
+              );
+            })()}
           </g>
         );
       })}
@@ -222,35 +245,29 @@ export function MuscleBodyDiagram({ primaryMuscles, secondaryMuscles, size = 'md
             side="back" hoveredMuscle={hovered} onHover={setHovered} />
         </div>
       </div>
-      <div className="flex items-center gap-4 justify-center">
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-fuchsia-500" />
-          <span className="text-white/40 text-[10px]">Primary</span>
+      {/* Muscle name chips */}
+      {(primary.length > 0 || secondary.length > 0) && (
+        <div className="space-y-1.5">
+          {primary.length > 0 && (
+            <div className="flex flex-wrap gap-1 justify-center">
+              {primary.map(id => (
+                <span key={id} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#c9a96e]/15 text-[#c9a96e] border border-[#c9a96e]/25">
+                  {ALL_MUSCLES.find(m => m.id === id)?.label}
+                </span>
+              ))}
+            </div>
+          )}
+          {secondary.length > 0 && (
+            <div className="flex flex-wrap gap-1 justify-center">
+              {secondary.map(id => (
+                <span key={id} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  {ALL_MUSCLES.find(m => m.id === id)?.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-          <span className="text-white/40 text-[10px]">Secondary</span>
-        </div>
-        {hovered && (
-          <span className="text-[#e8c98a] text-[10px] font-medium">
-            {ALL_MUSCLES.find(m => m.id === hovered)?.label}
-          </span>
-        )}
-      </div>
-      <div className="mt-1 flex items-center justify-center gap-4 py-1">
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#c9a96e]" />
-          <span className="text-white/35 text-[10px]">Primary</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-          <span className="text-white/35 text-[10px]">Secondary</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-white/10" />
-          <span className="text-white/20 text-[10px]">Not targeted</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

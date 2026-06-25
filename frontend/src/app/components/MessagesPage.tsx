@@ -143,6 +143,11 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
   const [searchLoading, setSearchLoading]       = useState(false);
   // People I follow — shown as suggestions before the user types
   const [followingSuggestions, setFollowingSuggestions] = useState<SearchUser[]>([]);
+  // Find Someone modal
+  const [showFindModal, setShowFindModal]       = useState(false);
+  const [findQuery, setFindQuery]               = useState('');
+  const [findResults, setFindResults]           = useState<SearchUser[]>([]);
+  const [findLoading, setFindLoading]           = useState(false);
   // Group chat creation
   const [showNewGroup, setShowNewGroup]         = useState(false);
   const [groupName, setGroupName]               = useState('');
@@ -471,6 +476,23 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
+
+  // ── Find Someone modal search ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!showFindModal) return;
+    if (findQuery.trim().length < 2) { setFindResults([]); return; }
+    const t = setTimeout(async () => {
+      setFindLoading(true);
+      try {
+        const q   = findQuery.trim().replace(/^@/, '');
+        const res = await fetch(`${API}/search?q=${encodeURIComponent(q)}&type=users`);
+        const d   = await res.json();
+        setFindResults(d.users || []);
+      } catch {}
+      finally { setFindLoading(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [findQuery, showFindModal]);
 
   // ── Debounced group member search ─────────────────────────────────────────
   useEffect(() => {
@@ -1285,7 +1307,7 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.08] text-white/60 hover:text-white/80 text-sm font-medium transition-all">
                 <Users className="w-4 h-4" />New Group
               </button>
-              <button type="button" onClick={() => { const el = document.querySelector<HTMLInputElement>('input[placeholder="Find or start a conversation"]'); el?.focus(); }}
+              <button type="button" onClick={() => { setShowFindModal(true); setFindQuery(''); setFindResults([]); }}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#c9a96e] hover:opacity-90 text-[#080608] text-sm font-semibold transition-all">
                 <Search className="w-4 h-4" />Find Someone
               </button>
@@ -1314,6 +1336,67 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
           </div>
         )}
       </div>
+
+      {/* ── Find Someone modal ────────────────────────────────────────────── */}
+      {showFindModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center pt-16 px-4"
+          onClick={() => setShowFindModal(false)}>
+          <div className="w-full max-w-sm bg-[#0d0b08] border border-[rgba(201,169,110,0.12)] rounded-2xl overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-white/[0.06]">
+              <p className="text-white font-semibold text-sm">Find Someone</p>
+              <button type="button" onClick={() => setShowFindModal(false)}
+                className="text-white/40 hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Search input */}
+            <div className="px-4 py-3 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2 bg-white/[0.07] rounded-xl px-3 py-2">
+                <Search className="w-4 h-4 text-white/30 shrink-0" />
+                <input
+                  autoFocus
+                  value={findQuery}
+                  onChange={e => setFindQuery(e.target.value)}
+                  placeholder="Search by name or username…"
+                  className="flex-1 bg-transparent text-white/90 placeholder:text-white/30 text-sm focus:outline-none"
+                />
+                {findLoading && <Loader2 className="w-3.5 h-3.5 text-white/30 animate-spin shrink-0" />}
+              </div>
+            </div>
+            {/* Results */}
+            <div className="max-h-72 overflow-y-auto">
+              {findQuery.trim().length < 2 ? (
+                <p className="px-4 py-6 text-white/30 text-sm text-center">Type a name to search</p>
+              ) : findResults.length === 0 && !findLoading ? (
+                <p className="px-4 py-6 text-white/30 text-sm text-center">No users found</p>
+              ) : (
+                findResults.map(u => (
+                  <button key={u.uid} type="button"
+                    onClick={async () => {
+                      setShowFindModal(false);
+                      await startDM(u.uid);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors text-left border-b border-white/[0.04] last:border-0">
+                    <Avatar className="w-10 h-10 shrink-0">
+                      <AvatarImage src={u.avatar} />
+                      <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-sm font-bold">
+                        {u.name?.[0] || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white/90 text-sm font-medium truncate">{u.name}</p>
+                      {u.username && <p className="text-white/30 text-xs">@{u.username}</p>}
+                    </div>
+                    <Send className="w-4 h-4 text-[#c9a96e] shrink-0" />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Conversation right-click context menu */}
       {contextMenuConv && (() => {
@@ -1470,79 +1553,4 @@ export function MessagesPage({ currentUser, onFollowRequestsViewed, onViewProfil
             </div>
             <div className="px-6 pt-4">
               <label className="text-white/40 text-[10px] font-semibold uppercase tracking-wider block mb-1.5">Group Name</label>
-              <Input
-                value={groupName}
-                onChange={e => setGroupName(e.target.value)}
-                placeholder="e.g. Morning Crew"
-                className="bg-[rgba(201,169,110,0.04)] border-[rgba(201,169,110,0.12)] text-white placeholder:text-white/20 text-sm focus:border-[rgba(201,169,110,0.5)]"
-              />
-            </div>
-            <div className="px-6 pt-3">
-              <label className="text-white/40 text-[10px] font-semibold uppercase tracking-wider block mb-1.5">Add Members</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/25 pointer-events-none" />
-                <Input
-                  value={groupSearch}
-                  onChange={e => setGroupSearch(e.target.value)}
-                  placeholder="Search by username..."
-                  className="pl-8 bg-[rgba(201,169,110,0.04)] border-[rgba(201,169,110,0.12)] text-white placeholder:text-white/20 text-sm focus:border-[rgba(201,169,110,0.5)]"
-                />
-              </div>
-            </div>
-            {selectedMembers.length > 0 && (
-              <div className="px-6 pt-3 flex flex-wrap gap-1.5">
-                {selectedMembers.map(m => (
-                  <span key={m.uid} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[rgba(201,169,110,0.12)] border border-[rgba(201,169,110,0.25)] text-[#e8c98a] text-xs font-medium">
-                    {m.name}
-                    <button type="button" onClick={() => setSelectedMembers(p => p.filter(x => x.uid !== m.uid))}
-                      className="text-[#c9a96e]/60 hover:text-[#c9a96e] transition-colors">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="px-6 pt-2 pb-4 overflow-y-auto max-h-48">
-              {groupResultsLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="w-4 h-4 text-[#c9a96e] animate-spin" />
-                </div>
-              ) : groupResults.length > 0 ? (
-                <div className="space-y-0.5">
-                  {groupResults.map(u => {
-                    const added = selectedMembers.some(m => m.uid === u.uid);
-                    return (
-                      <button key={u.uid} type="button"
-                        onClick={() => setSelectedMembers(p => added ? p.filter(x => x.uid !== u.uid) : [...p, u])}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all ${added ? 'bg-[rgba(201,169,110,0.08)] border border-[rgba(201,169,110,0.20)]' : 'hover:bg-[rgba(201,169,110,0.04)] border border-transparent'}`}>
-                        <Avatar className="w-8 h-8 shrink-0">
-                          <AvatarImage src={u.avatar} />
-                          <AvatarFallback className="bg-gradient-to-br from-[#c9a96e] to-[#a07840] text-white text-xs font-semibold">{u.name?.[0] || '?'}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0 text-left">
-                          <p className="text-white text-sm font-medium truncate">{u.name}</p>
-                          <p className="text-white/40 text-xs">@{u.username}</p>
-                        </div>
-                        {added && <Check className="w-4 h-4 text-[#c9a96e] shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : groupSearch.trim().length >= 2 ? (
-                <p className="text-white/25 text-sm text-center py-4">No users found</p>
-              ) : null}
-            </div>
-            <div className="px-6 pb-5 pt-2 border-t border-[rgba(201,169,110,0.08)]">
-              <button type="button" onClick={createGroup} disabled={creatingGroup || !groupName.trim() || selectedMembers.length === 0}
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#c9a96e] to-[#e8c98a] text-[#080608] font-semibold text-sm hover:opacity-90 disabled:opacity-40 transition-all flex items-center justify-center gap-2">
-                {creatingGroup ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                {creatingGroup ? 'Creating...' : `Create Group${selectedMembers.length > 0 ? ' (' + (selectedMembers.length + 1) + ')' : ''}`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-export default MessagesPage;
+              <Inp
